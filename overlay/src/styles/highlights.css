@@ -1,0 +1,303 @@
+.brakit-selected {
+  outline: 2px solid #8b5cf6 !important;
+  outline-offset: 2px !important;
+  position: relative !important;
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1) !important;
+}
+
+.brakit-dragging {
+  opacity: 0.5 !important;
+  pointer-events: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.brakit-text-hover {
+  outline: 1px dashed #38bdf8 !important;
+  outline-offset: 1px !important;
+  cursor: text !important;
+  transition: outline 0.15s ease-in-out !important;
+}
+
+.brakit-text-editing {
+  outline: 2px solid #0ea5e9 !important;
+  outline-offset: 2px !important;
+  background: rgba(56, 189, 248, 0.05) !important;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1) !important;
+}
+
+.brakit-color-editing {
+  outline: 2px solid #a855f7 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.1) !important;
+}
+
+.brakit-toolbar-handle {
+  padding: 6px 8px;
+  cursor: grab;
+  color: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.brakit-toolbar-handle:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.brakit-toolbar-handle:active {
+  cursor: grabbing;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.brakit-toolbar-handle svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes brakitToolbarSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.brakit-toolbar-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.brakit-ai-tool-group {
+  display: flex;
+  gap: 6px;
+}
+
+.brakit-tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  color: rgba(0, 0, 0, 0.75);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 11px;
+  min-width: 64px;
+  position: relative;
+  overflow: visible;
+}
+
+.brakit-undo-btn {
+  min-width: 96px;
+}
+
+.brakit-undo-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 14px;
+}
+
+.brakit-undo-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(99, 102, 241, 0.25);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: brakitToolbarSpin 0.9s linear infinite;
+  display: none;
+}
+
+.brakit-undo-btn.is-busy .brakit-undo-spinner {
+  display: inline-flex;
+}
+
+.brakit-undo-btn .brakit-tool-meta {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  border-radius: 999px;
+  padding: 0 6px;
+  background: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+  display: none;
+  line-height: 1.4;
+}
+
+.brakit-undo-btn .brakit-tool-meta.is-visible {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brakit-undo-btn .brakit-tool-meta.variant-info {
+  background: rgba(99, 102, 241, 0.2);
+  color: #1e1b4b;
+}
+
+.brakit-undo-btn.is-available:not(.is-busy) {
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.brakit-undo-btn.is-busy {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: rgba(31, 41, 55, 0.95);
+}
+
+.brakit-undo-btn.is-attention {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25), 0 8px 20px rgba(15, 23, 42, 0.2);
+  transform: translateY(-1px);
+}
+
+.brakit-tool-btn:hover:not([disabled]) {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.9);
+}
+
+.brakit-tool-btn.active {
+  background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+  border-color: rgba(0, 122, 255, 0.3);
+  box-shadow:
+    0 2px 12px rgba(0, 122, 255, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.brakit-tool-btn.active:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 16px rgba(0, 122, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.brakit-tool-btn[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+.brakit-tool-lock {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #fde047;
+  font-size: 10px;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.5);
+}
+
+.brakit-tool-btn[data-lock="true"] .brakit-tool-lock {
+  display: inline-flex;
+}
+
+.brakit-tool-btn[data-lock="true"]::after {
+  content: attr(data-lock-message);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translate(-50%, 6px);
+  background: rgba(7, 11, 21, 0.98);
+  border: 1px solid rgba(248, 250, 252, 0.35);
+  color: #fef08a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow:
+    0 10px 25px rgba(0, 0, 0, 0.25),
+    0 0 10px rgba(250, 240, 137, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+}
+
+.brakit-tool-btn[data-lock="true"]:hover::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.brakit-tool-icon {
+  font-size: 20px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.brakit-tool-btn.active .brakit-tool-icon {
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.2));
+}
+
+.brakit-tool-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.8;
+}
+
+.brakit-tool-btn.active .brakit-tool-label {
+  opacity: 0.95;
+}
+
+.brakit-toolbar-divider {
+  width: 1px;
+  height: 44px;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.1) 20%,
+    rgba(0, 0, 0, 0.1) 80%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  margin: 0 6px;
+}
+
+.brakit-toolbar-close {
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  color: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 28px;
+  height: 28px;
+}
+
+.brakit-toolbar-close:hover {
+  background: rgba(255, 59, 48, 0.1);
+  border-color: rgba(255, 59, 48, 0.3);
+  color: #ff3b30;
+}
+
+.brakit-toolbar-close:active {
+  transform: scale(0.95);
+}

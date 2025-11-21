@@ -1,0 +1,120 @@
+[
+  {
+    "id": "login-form",
+    "label": "Login Form",
+    "icon": "🔒",
+    "title": "Sign in",
+    "submitLabel": "Sign In",
+    "description": "Enter your credentials to access your account.",
+    "fields": [
+      {
+        "name": "email",
+        "label": "Email",
+        "type": "email",
+        "placeholder": "you@example.com",
+        "required": true
+      },
+      {
+        "name": "password",
+        "label": "Password",
+        "type": "password",
+        "placeholder": "••••••••",
+        "required": true,
+        "minLength": 8,
+        "description": "Must be at least 8 characters."
+      }
+    ]
+  },
+  {
+    "id": "signup-form",
+    "label": "Signup Form",
+    "icon": "📝",
+    "title": "Create account",
+    "submitLabel": "Sign Up",
+    "description": "Join us by filling out the information below.",
+    "fields": [
+      {
+        "name": "name",
+        "label": "Full Name",
+        "type": "text",
+        "placeholder": "Jane Doe",
+        "required": true
+      },
+      {
+        "name": "email",
+        "label": "Email",
+        "type": "email",
+        "placeholder": "you@example.com",
+        "required": true
+      },
+      {
+        "name": "password",
+        "label": "Password",
+        "type": "password",
+        "placeholder": "Create a strong password",
+        "required": true,
+        "minLength": 8,
+        "description": "Must be at least 8 characters."
+      },
+      {
+        "name": "terms",
+        "label": "I agree to the Terms of Service",
+        "type": "checkbox",
+        "required": true,
+        "description": "You must accept the terms before continuing."
+      }
+    ]
+  },
+  {
+    "id": "contact-form",
+    "label": "Contact Form",
+    "icon": "✉",
+    "title": "Send us a message",
+    "submitLabel": "Send Message",
+    "description": "We typically respond within one business day.",
+    "fields": [
+      {
+        "name": "name",
+        "label": "Name",
+        "type": "text",
+        "placeholder": "Your name",
+        "required": true
+      },
+      {
+        "name": "email",
+        "label": "Email",
+        "type": "email",
+        "placeholder": "you@example.com",
+        "required": true
+      },
+      {
+        "name": "message",
+        "label": "Message",
+        "type": "textarea",
+        "placeholder": "How can we help?",
+        "required": true,
+        "minLength": 10,
+        "description": "Provide a few details so we can assist you."
+      }
+    ]
+  },
+  {
+    "id": "newsletter-form",
+    "label": "Newsletter Form",
+    "icon": "📬",
+    "title": "Stay in the loop",
+    "submitLabel": "Subscribe",
+    "description": "Get product updates and announcements in your inbox.",
+    "fields": [
+      {
+        "name": "email",
+        "label": "Email",
+        "type": "email",
+        "placeholder": "you@example.com",
+        "required": true
+      }
+    ]
+  }
+]
+
+

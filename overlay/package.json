@@ -1,0 +1,28 @@
+{
+  "name": "brakit-overlay",
+  "version": "1.0.0",
+  "description": "Web overlay for brakit visual code editing",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "terser": "^5.44.0",
+    "typescript": "^5.9.2",
+    "vite": "^6.3.6"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@irojs/iro-core": "^1.2.1",
+    "lit": "^3.3.1",
+    "toastify-js": "^1.12.0"
+  }
+}

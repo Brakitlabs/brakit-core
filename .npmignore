@@ -1,0 +1,43 @@
+# Source files
+src/
+cli/src/
+backend/*.ts
+backend/routes/*.ts
+backend/services/**/*.ts
+backend/utils/*.ts
+overlay/src/
+vscode-extension/src/
+
+# Config files
+tsconfig.json
+cli/tsconfig.json
+backend/tsconfig.json
+overlay/tsconfig.json
+vscode-extension/tsconfig.json
+*.config.*
+.eslintrc*
+.prettierrc*
+
+# Tests
+tests/
+__tests__/
+*.test.ts
+*.spec.ts
+coverage/
+
+# Dev
+node_modules/
+.env
+.env.*
+*.log
+.DS_Store
+
+# Excluded
+brakit-test-app/
+poc/
+vendor/
+app/
+.git/
+.github/
+.vscode/
+.gemini/
