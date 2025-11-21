@@ -56,15 +56,16 @@ npx brakit start
 
 Open the printed proxy URL, click the Brakit bubble, and choose a tool:
 
-| Tool         | Icon | Usage                                                                                          |
-| ------------ | ---- | ---------------------------------------------------------------------------------------------- |
-| Text edit    | `A`  | Double-click text to edit, press Enter to save.                                                |
-| Font size    | `Aa` | Drag the slider to update tailwind `text-*` classes or inline styles.                          |
-| Color picker | 🎨   | Adjust text, background, hover states; maps to Tailwind tokens when possible.                  |
-| Delete       | 🗑️   | Select an element; Brakit removes only the corresponding JSX/TSX node.                         |
-| Create Page  | ➕   | Launch the workflow to scaffold a brand-new page/route from within the overlay.                |
+| Tool         | Icon | Usage                                                                           |
+| ------------ | ---- | ------------------------------------------------------------------------------- |
+| Text edit    | `A`  | Double-click text to edit, press Enter to save.                                 |
+| Font size    | `Aa` | Drag the slider to update tailwind `text-*` classes or inline styles.           |
+| Color picker | 🎨   | Adjust text, background, hover states; maps to Tailwind tokens when possible.   |
+| Delete       | 🗑️   | Select an element; Brakit removes only the corresponding JSX/TSX node.          |
+| Create Page  | ➕   | Launch the workflow to scaffold a brand-new page/route from within the overlay. |
+| Undo         | ↩️   | Undo to revert the last Brakit edit in the current session.                     |
 
-Changes are written back to your repo in real time. Keep `git status` open to review diffs as you iterate.
+Changes are written back to your repo in real time.
 
 ---
 
@@ -73,14 +74,16 @@ Changes are written back to your repo in real time. Keep `git status` open to re
 Brakit Core is designed to be extensible. It supports a **Generic Plugin System** that allows you to add new features, such as AI assistance or custom tools, without modifying the core codebase.
 
 ### How to use Plugins
+
 1.  Place your plugin bundle (e.g., `my-plugin.js`) in the `.brakit/plugins/` directory of your project.
 2.  Restart Brakit: `npx brakit start`.
 3.  The plugin will be automatically injected into the overlay.
 
 ### Creating Plugins
+
 You can extend Brakit's functionality by creating custom plugins. Plugins are JavaScript bundles that register with the overlay and can add new tools, UI components, or integrate with external services.
 
-For more details on how the plugin system works, see [Architecture Guide](docs/ARCHITECTURE.md).
+For more details on how the plugin system works, see [Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) and [Architecture Guide](docs/ARCHITECTURE.md).
 To contribute to Core, check out [Contributing Guide](docs/CONTRIBUTING.md).
 
 ---

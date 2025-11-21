@@ -1,6 +1,26 @@
 import fs from "fs";
 import path from "path";
 import jscodeshift from "jscodeshift";
+import type {
+  ASTPath,
+  Collection,
+  JSXAttribute,
+  JSXElement,
+  JSXExpressionContainer,
+  JSXFragment,
+  JSXIdentifier,
+  JSXSpreadAttribute,
+  JSXSpreadChild,
+  JSXText,
+  Literal,
+  TemplateLiteral,
+  ImportDefaultSpecifier,
+  ImportNamespaceSpecifier,
+  ImportSpecifier,
+  JSXNamespacedName,
+  JSXMemberExpression,
+} from "jscodeshift";
+import type { namedTypes } from "ast-types";
 import prettier from "prettier";
 import {
   BaseUpdateResult,
@@ -22,11 +42,54 @@ import { actionHistory } from "../history";
 const COMPONENT_FILE_EXTENSIONS = [".tsx", ".ts", ".jsx", ".js"];
 const STYLE_PROP_SET = new Set(STYLE_PROPS);
 
+type JSXChildNode =
+  | JSXElement
+  | JSXFragment
+  | JSXText
+  | JSXExpressionContainer
+  | JSXSpreadChild
+  | Literal
+  | namedTypes.Node
+  | null
+  | undefined;
+
+type ParsedAst = Collection<JSXElement>;
+
+function resolveJSXElementName(
+  nameNode:
+    | JSXIdentifier
+    | JSXNamespacedName
+    | JSXMemberExpression
+    | null
+    | undefined
+): string | undefined {
+  if (!nameNode) {
+    return undefined;
+  }
+
+  if (nameNode.type === "JSXIdentifier") {
+    return nameNode.name;
+  }
+
+  if (nameNode.type === "JSXNamespacedName") {
+    return nameNode.name.name;
+  }
+
+  if (nameNode.type === "JSXMemberExpression") {
+    const object = nameNode.object;
+    if (object.type === "JSXIdentifier") {
+      return object.name;
+    }
+  }
+
+  return undefined;
+}
+
 export interface ElementMatchContext {
   filePath: string;
-  ast: any;
-  matchedNode: any;
-  matchedPath: any;
+  ast: ParsedAst;
+  matchedNode: JSXElement;
+  matchedPath: ASTPath<JSXElement>;
   elementName?: string;
   hasInlineClassName: boolean;
   usagePropNames: string[];
@@ -86,26 +149,30 @@ export abstract class BaseUpdateService {
 
   protected buildElementMatchContext(
     filePath: string,
-    ast: any,
-    matchedNode: any,
-    matchedPath: any
+    ast: ParsedAst,
+    matchedNode: JSXElement,
+    matchedPath: ASTPath<JSXElement>
   ): ElementMatchContext {
-    const attributes: any[] = matchedNode.openingElement?.attributes || [];
+    const attributes: Array<
+      JSXAttribute | JSXSpreadAttribute | null | undefined
+    > = matchedNode.openingElement?.attributes || [];
 
     const usagePropNames = Array.from(
       new Set(
         attributes
-          .map((attr: any) => attr?.name?.name)
+          .map((attr) =>
+            attr && "name" in attr ? (attr.name as JSXIdentifier | null) : null
+          )
+          .map((identifier) => identifier?.name)
           .filter((name: string | undefined): name is string => Boolean(name))
       )
     );
 
-    const elementName =
-      matchedNode.openingElement?.name?.name ||
-      matchedNode.openingElement?.name?.object?.name;
+    const elementName = resolveJSXElementName(matchedNode.openingElement?.name);
 
     const hasInlineClassName = attributes.some(
-      (attr: any) => attr?.name?.name === "className"
+      (attr): attr is JSXAttribute =>
+        attr?.type === "JSXAttribute" && attr.name?.name === "className"
     );
 
     return {
@@ -121,9 +188,9 @@ export abstract class BaseUpdateService {
 
   protected findLocalElementMatch(options: {
     filePath: string;
-    ast: any;
+    ast: ParsedAst;
     possibleNames: string[];
-    matcher: (node: any, children: any[]) => boolean;
+    matcher: (node: JSXElement, children: JSXChildNode[]) => boolean;
     className: string;
     text: string;
     serviceName: string;
@@ -138,7 +205,11 @@ export abstract class BaseUpdateService {
       serviceName,
     } = options;
 
-    const candidates = this.collectCandidateElements(ast, possibleNames, matcher);
+    const candidates = this.collectCandidateElements(
+      ast,
+      possibleNames,
+      matcher
+    );
     const elementMatch = this.selectBestMatchingElement(
       candidates,
       className,
@@ -160,7 +231,7 @@ export abstract class BaseUpdateService {
 
   protected createElementMatcher(
     options: ElementMatcherOptions
-  ): (node: any, children: any[]) => boolean {
+  ): (node: JSXElement, children: JSXChildNode[]) => boolean {
     const normalizedIdentifier = this.normalizeText(options.identifier ?? "");
     const normalizedText = this.normalizeText(options.textContent ?? "");
     const elementTagHint = options.elementTag
@@ -171,13 +242,9 @@ export abstract class BaseUpdateService {
       : "";
     const classTokens = this.sanitizeClassTokens(options.className);
 
-    return (node: any, children: any[]) => {
-      const nodeName =
-        node.openingElement?.name?.name ||
-        node.openingElement?.name?.object?.name;
-      const normalizedNodeName = nodeName
-        ? this.normalizeText(nodeName)
-        : "";
+    return (node: JSXElement, children: JSXChildNode[]) => {
+      const nodeName = resolveJSXElementName(node.openingElement?.name);
+      const normalizedNodeName = nodeName ? this.normalizeText(nodeName) : "";
 
       const nodeText = this.extractNodeText(children);
 
@@ -193,10 +260,16 @@ export abstract class BaseUpdateService {
         return true;
       }
 
-      const attributes: any[] = node.openingElement?.attributes || [];
+      const attributes: Array<
+        JSXAttribute | JSXSpreadAttribute | null | undefined
+      > = node.openingElement?.attributes || [];
       for (const attr of attributes) {
-        const attrName = attr?.name?.name;
-        const value = this.extractStringValue(attr?.value);
+        if (!attr || attr.type !== "JSXAttribute") {
+          continue;
+        }
+
+        const attrName = attr.name?.name;
+        const value = this.extractStringValue(attr.value as any);
         if (value) {
           const normalizedValue = this.normalizeText(value);
           if (
@@ -232,7 +305,7 @@ export abstract class BaseUpdateService {
 
   protected resolveComponentUsage(
     text: string,
-    ast: any,
+    ast: ParsedAst,
     filePath: string
   ): {
     localUsage?: ComponentUsageMatch | null;
@@ -257,10 +330,11 @@ export abstract class BaseUpdateService {
   }): {
     componentFilePath: string;
     source: string;
-    ast: any;
+    ast: ParsedAst;
     possibleNames: string[];
   } | null {
-    const { usageFilePath, componentName, tag, componentFileOverride } = options;
+    const { usageFilePath, componentName, tag, componentFileOverride } =
+      options;
 
     const componentFilePath = componentFileOverride
       ? componentFileOverride
@@ -282,7 +356,7 @@ export abstract class BaseUpdateService {
   }
 
   protected expressionReferencesProps(
-    node: any,
+    node: namedTypes.Node | null | undefined,
     propNames: Set<string>
   ): boolean {
     if (!node) {
@@ -290,74 +364,120 @@ export abstract class BaseUpdateService {
     }
 
     switch (node.type) {
-      case "Identifier":
-        return propNames.has(node.name);
-      case "MemberExpression":
-        if (node.object) {
+      case "Identifier": {
+        const identifier = node as namedTypes.Identifier;
+        return propNames.has(identifier.name);
+      }
+      case "MemberExpression": {
+        const member = node as namedTypes.MemberExpression;
+        const object = member.object as namedTypes.Node | null | undefined;
+        const property = member.property as namedTypes.Node | null | undefined;
+
+        if (object?.type === "Identifier") {
+          const objIdentifier = object as namedTypes.Identifier;
           if (
-            node.object.type === "Identifier" &&
-            (propNames.has(node.object.name) || node.object.name === "props")
+            propNames.has(objIdentifier.name) ||
+            objIdentifier.name === "props"
           ) {
-            if (!node.computed && node.property?.type === "Identifier") {
-              if (propNames.has(node.property.name)) {
-                return true;
-              }
+            if (
+              !member.computed &&
+              property?.type === "Identifier" &&
+              propNames.has((property as namedTypes.Identifier).name)
+            ) {
+              return true;
             }
             return true;
           }
-
-          if (this.expressionReferencesProps(node.object, propNames)) {
-            return true;
-          }
         }
 
+        if (this.expressionReferencesProps(object, propNames)) {
+          return true;
+        }
+
+        if (property && this.expressionReferencesProps(property, propNames)) {
+          return true;
+        }
+
+        return false;
+      }
+      case "CallExpression": {
+        const call = node as namedTypes.CallExpression;
         if (
-          node.property &&
-          this.expressionReferencesProps(node.property, propNames)
+          this.expressionReferencesProps(
+            call.callee as namedTypes.Node,
+            propNames
+          )
         ) {
           return true;
         }
-        return false;
-      case "CallExpression":
-        if (this.expressionReferencesProps(node.callee, propNames)) {
-          return true;
-        }
-        return node.arguments?.some((arg: any) =>
-          this.expressionReferencesProps(arg, propNames)
+        return call.arguments?.some((arg) =>
+          this.expressionReferencesProps(arg as namedTypes.Node, propNames)
         );
-      case "TemplateLiteral":
-        return node.expressions?.some((expr: any) =>
-          this.expressionReferencesProps(expr, propNames)
+      }
+      case "TemplateLiteral": {
+        const template = node as namedTypes.TemplateLiteral;
+        return template.expressions?.some((expr) =>
+          this.expressionReferencesProps(expr as namedTypes.Node, propNames)
         );
+      }
       case "BinaryExpression":
-      case "LogicalExpression":
+      case "LogicalExpression": {
+        const binary = node as namedTypes.BinaryExpression;
         return (
-          this.expressionReferencesProps(node.left, propNames) ||
-          this.expressionReferencesProps(node.right, propNames)
+          this.expressionReferencesProps(
+            binary.left as namedTypes.Node,
+            propNames
+          ) ||
+          this.expressionReferencesProps(
+            binary.right as namedTypes.Node,
+            propNames
+          )
         );
-      case "ConditionalExpression":
+      }
+      case "ConditionalExpression": {
+        const conditional = node as namedTypes.ConditionalExpression;
         return (
-          this.expressionReferencesProps(node.test, propNames) ||
-          this.expressionReferencesProps(node.consequent, propNames) ||
-          this.expressionReferencesProps(node.alternate, propNames)
+          this.expressionReferencesProps(
+            conditional.test as namedTypes.Node,
+            propNames
+          ) ||
+          this.expressionReferencesProps(
+            conditional.consequent as namedTypes.Node,
+            propNames
+          ) ||
+          this.expressionReferencesProps(
+            conditional.alternate as namedTypes.Node,
+            propNames
+          )
         );
-      case "ArrayExpression":
-        return node.elements?.some((el: any) =>
-          this.expressionReferencesProps(el, propNames)
+      }
+      case "ArrayExpression": {
+        const arrayExpr = node as namedTypes.ArrayExpression;
+        return arrayExpr.elements?.some((el) =>
+          this.expressionReferencesProps(el as namedTypes.Node, propNames)
         );
-      case "ObjectExpression":
-        return node.properties?.some((prop: any) => {
+      }
+      case "ObjectExpression": {
+        const objectExpr = node as namedTypes.ObjectExpression;
+        return objectExpr.properties?.some((prop) => {
           if (!prop) {
             return false;
           }
           if (prop.type === "Property") {
-            return this.expressionReferencesProps(prop.value, propNames);
+            return this.expressionReferencesProps(
+              (prop as namedTypes.Property).value as namedTypes.Node,
+              propNames
+            );
           }
           if (prop.type === "SpreadElement") {
-            return this.expressionReferencesProps(prop.argument, propNames);
+            return this.expressionReferencesProps(
+              (prop as namedTypes.SpreadElement).argument as namedTypes.Node,
+              propNames
+            );
           }
           return false;
         });
+      }
       case "UnaryExpression":
       case "UpdateExpression":
       case "AwaitExpression":
@@ -365,27 +485,50 @@ export abstract class BaseUpdateService {
       case "TSNonNullExpression":
       case "TSAsExpression":
       case "TypeCastExpression":
-      case "ParenthesizedExpression":
+      case "ParenthesizedExpression": {
+        const expr = node as namedTypes.Node & {
+          argument?: namedTypes.Node;
+          expression?: namedTypes.Node;
+        };
         return this.expressionReferencesProps(
-          node.argument ?? node.expression,
+          expr.argument ?? expr.expression,
           propNames
         );
-      case "AssignmentExpression":
+      }
+      case "AssignmentExpression": {
+        const assignment = node as namedTypes.AssignmentExpression;
         return (
-          this.expressionReferencesProps(node.left, propNames) ||
-          this.expressionReferencesProps(node.right, propNames)
+          this.expressionReferencesProps(
+            assignment.left as namedTypes.Node,
+            propNames
+          ) ||
+          this.expressionReferencesProps(
+            assignment.right as namedTypes.Node,
+            propNames
+          )
         );
-      case "JSXExpressionContainer":
-        return this.expressionReferencesProps(node.expression, propNames);
-      case "JSXElement":
-        return node.children?.some((child: any) =>
+      }
+      case "JSXExpressionContainer": {
+        const jsxExpr = node as JSXExpressionContainer;
+        return this.expressionReferencesProps(
+          jsxExpr.expression as namedTypes.Node,
+          propNames
+        );
+      }
+      case "JSXElement": {
+        const jsxElement = node as JSXElement;
+        return !!jsxElement.children?.some((child: JSXChildNode) =>
           child?.type === "JSXExpressionContainer"
-            ? this.expressionReferencesProps(child.expression, propNames)
+            ? this.expressionReferencesProps(
+                (child as JSXExpressionContainer).expression as namedTypes.Node,
+                propNames
+              )
             : false
         );
-      default:
-        return false;
+      }
     }
+
+    return false;
   }
 
   /**
@@ -442,6 +585,18 @@ export abstract class BaseUpdateService {
       ? this.resolveFilePath(options.file)
       : null;
 
+    // Prefer updating the file the user is looking at before falling back to owner hints
+    const localMatch = await this.findFileForText(
+      options.lookupText,
+      options.tag,
+      options.file,
+      options.serviceName
+    );
+
+    if (localMatch) {
+      return localMatch;
+    }
+
     const hinted = this.resolveFileFromOwnerHints({
       requestedSourcePath,
       ownerComponentName: options.ownerComponentName,
@@ -452,12 +607,7 @@ export abstract class BaseUpdateService {
       return hinted;
     }
 
-    return this.findFileForText(
-      options.lookupText,
-      options.tag,
-      options.file,
-      options.serviceName
-    );
+    return null;
   }
 
   protected resolveFileFromOwnerHints(options: {
@@ -593,21 +743,21 @@ export abstract class BaseUpdateService {
     try {
       const source = fs.readFileSync(filePath, "utf8");
       const j = jscodeshift.withParser("tsx") as typeof jscodeshift;
-      const ast = j(source);
+      const ast = j(source) as ParsedAst;
 
       let found = false;
       const normalizedTarget = this.normalizeText(text);
 
-      ast.findJSXElements().forEach((path: any) => {
+      ast.findJSXElements().forEach((path: ASTPath<JSXElement>) => {
         if (found) return;
 
         const { node } = path;
         const nodeName =
-          node.openingElement?.name?.name ||
-          node.openingElement?.name?.object?.name;
+          resolveJSXElementName(node.openingElement?.name);
 
-        if (possibleTags.includes(nodeName)) {
-          const children = node.children || [];
+        if (nodeName && possibleTags.includes(nodeName)) {
+          const children: JSXChildNode[] =
+            ((node.children as unknown as JSXChildNode[]) || []) as JSXChildNode[];
           let hasStaticText = false;
           const textInfo = this.collectNodeTextInfo(children);
           const normalizedCombinedText = this.normalizeText(textInfo.text);
@@ -641,9 +791,9 @@ export abstract class BaseUpdateService {
   protected parseAndFindElements(
     source: string,
     tag: string
-  ): { ast: any; possibleNames: string[] } {
+  ): { ast: ParsedAst; possibleNames: string[] } {
     const j = jscodeshift.withParser("tsx") as typeof jscodeshift;
-    const ast = j(source);
+    const ast = j(source) as ParsedAst;
     const possibleNames = this.getPossibleTagNames(tag);
     return { ast, possibleNames };
   }
@@ -657,12 +807,13 @@ export abstract class BaseUpdateService {
     targetText: string,
     targetClassName?: string,
     additionalClassMatch?: string
-  ): (node: any, children: any[]) => boolean {
+  ): (node: JSXElement, children: JSXChildNode[]) => boolean {
     const normalizedTarget = this.normalizeText(targetText);
     const targetClassTokens = this.sanitizeClassTokens(targetClassName);
-    const additionalClassTokens = this.sanitizeClassTokens(additionalClassMatch);
+    const additionalClassTokens =
+      this.sanitizeClassTokens(additionalClassMatch);
 
-    return (node: any, children: any[]) => {
+    return (node: JSXElement, children: JSXChildNode[]) => {
       let textMatched = false;
       const textInfo = this.collectNodeTextInfo(children);
       const normalizedCombinedText = this.normalizeText(textInfo.text);
@@ -682,11 +833,12 @@ export abstract class BaseUpdateService {
         (targetClassTokens.size > 0 || additionalClassTokens.size > 0)
       ) {
         const classAttr = node.openingElement.attributes?.find(
-          (attr: any) => attr.name?.name === "className"
+          (attr): attr is JSXAttribute =>
+            attr?.type === "JSXAttribute" && attr.name?.name === "className"
         );
         if (classAttr && classAttr.value) {
           const classValue =
-            this.extractStringValue(classAttr.value) || "";
+            this.extractStringValue(classAttr.value as any) || "";
           if (classValue) {
             const nodeClassTokens = this.sanitizeClassTokens(classValue);
 
@@ -712,31 +864,55 @@ export abstract class BaseUpdateService {
     };
   }
 
-  protected extractStringValue(node: any): string | null {
+  protected extractStringValue(
+    node:
+      | Literal
+      | TemplateLiteral
+      | JSXExpressionContainer
+      | JSXText
+      | namedTypes.Node
+      | null
+      | undefined
+  ): string | null {
     if (!node) {
       return null;
     }
 
     switch (node.type) {
       case "StringLiteral":
-      case "Literal":
-        return typeof node.value === "string" ? node.value : null;
+      case "Literal": {
+        const literal = node as Literal;
+        return typeof literal.value === "string" ? literal.value : null;
+      }
       case "TemplateLiteral":
-        if (node.expressions && node.expressions.length > 0) {
+        if (
+          (node as TemplateLiteral).expressions &&
+          (node as TemplateLiteral).expressions.length > 0
+        ) {
           return null;
         }
-        return node.quasis?.map((q: any) => q.value.cooked).join("") ?? null;
-      case "JSXExpressionContainer":
-        return this.extractStringValue(node.expression);
-      case "JSXText":
-        return typeof node.value === "string" ? node.value : null;
+        return (
+          (node as TemplateLiteral).quasis
+            ?.map(
+              (q: TemplateLiteral["quasis"][number]) => q.value.cooked ?? ""
+            )
+            .join("") ?? null
+        );
+      case "JSXExpressionContainer": {
+        const jsxExpr = node as JSXExpressionContainer;
+        return this.extractStringValue(jsxExpr.expression as any);
+      }
+      case "JSXText": {
+        const jsxText = node as JSXText;
+        return typeof jsxText.value === "string" ? jsxText.value : null;
+      }
       default:
         return null;
     }
   }
 
   protected findComponentUsageByText(
-    ast: any,
+    ast: ParsedAst,
     text: string
   ): ComponentUsageMatch | null {
     const normalizedTarget = this.normalizeText(text);
@@ -747,30 +923,36 @@ export abstract class BaseUpdateService {
 
     let match: ComponentUsageMatch | null = null;
 
-    ast.find(jscodeshift.JSXElement).forEach((path: any) => {
+    ast.find(jscodeshift.JSXElement).forEach((path: ASTPath<JSXElement>) => {
       if (match) {
         return;
       }
 
-      const node: any = path.node;
-      const nameNode: any = node.openingElement?.name;
-      const candidateName: string | undefined =
-        nameNode?.name ?? nameNode?.object?.name;
+      const node = path.node;
+      const nameNode = node.openingElement?.name;
+      const candidateName = resolveJSXElementName(nameNode);
 
       if (!candidateName || !/^[A-Z]/.test(candidateName)) {
         return;
       }
 
       const attributeSet = new Set<string>();
-      const attributes: any[] = node.openingElement?.attributes || [];
+      const attributes: Array<
+        JSXAttribute | JSXSpreadAttribute | null | undefined
+      > = node.openingElement?.attributes || [];
 
       for (const attr of attributes) {
-        if (!attr?.name?.name) {
+        if (!attr || attr.type !== "JSXAttribute") {
           continue;
         }
 
-        attributeSet.add(attr.name.name);
-        const literalValue = this.extractStringValue(attr.value);
+        const attrName =
+          typeof attr.name?.name === "string" ? attr.name.name : undefined;
+        if (attrName) {
+          attributeSet.add(attrName);
+        }
+
+        const literalValue = this.extractStringValue(attr.value as any);
         if (
           literalValue &&
           this.normalizeText(literalValue) === normalizedTarget
@@ -784,7 +966,8 @@ export abstract class BaseUpdateService {
         }
       }
 
-      const children: any[] = node.children || [];
+      const children: JSXChildNode[] =
+        ((node.children as unknown as JSXChildNode[]) || []) as JSXChildNode[];
       for (const child of children) {
         const literalValue = this.extractStringValue(child);
         if (
@@ -872,7 +1055,10 @@ export abstract class BaseUpdateService {
             continue;
           }
 
-          const indexMatch = this.matchComponentIndexFile(fullPath, componentName);
+          const indexMatch = this.matchComponentIndexFile(
+            fullPath,
+            componentName
+          );
           if (indexMatch) {
             return indexMatch;
           }
@@ -886,9 +1072,7 @@ export abstract class BaseUpdateService {
           }
         } else if (entry.isFile()) {
           if (
-            COMPONENT_FILE_EXTENSIONS.some((ext) =>
-              entry.name.endsWith(ext)
-            ) &&
+            COMPONENT_FILE_EXTENSIONS.some((ext) => entry.name.endsWith(ext)) &&
             this.matchesComponentBaseName(entry.name, componentName)
           ) {
             return fullPath;
@@ -909,14 +1093,19 @@ export abstract class BaseUpdateService {
     return null;
   }
 
-  private matchComponentIndexFile(dirPath: string, componentName: string): string | null {
+  private matchComponentIndexFile(
+    dirPath: string,
+    componentName: string
+  ): string | null {
     try {
       const stats = fs.statSync(dirPath);
       if (!stats.isDirectory()) {
         return null;
       }
 
-      if (!this.matchesComponentBaseName(path.basename(dirPath), componentName)) {
+      if (
+        !this.matchesComponentBaseName(path.basename(dirPath), componentName)
+      ) {
         return null;
       }
 
@@ -936,7 +1125,10 @@ export abstract class BaseUpdateService {
     return null;
   }
 
-  private matchesComponentBaseName(fileName: string, componentName: string): boolean {
+  private matchesComponentBaseName(
+    fileName: string,
+    componentName: string
+  ): boolean {
     if (!fileName || !componentName) {
       return false;
     }
@@ -979,7 +1171,7 @@ export abstract class BaseUpdateService {
 
           try {
             const j = jscodeshift.withParser("tsx") as typeof jscodeshift;
-            const ast = j(source);
+            const ast = j(source) as ParsedAst;
             const usageMatch = this.findComponentUsageByText(ast, text);
 
             if (usageMatch) {
@@ -1286,9 +1478,15 @@ export abstract class BaseUpdateService {
         }
 
         const declaration = path.node;
-        const specifiers = declaration.specifiers || [];
-        const matches = specifiers.some((specifier: any) => {
-          if (!specifier?.local?.name) {
+        const specifiers: Array<
+          | ImportSpecifier
+          | ImportDefaultSpecifier
+          | ImportNamespaceSpecifier
+          | null
+          | undefined
+        > = declaration.specifiers || [];
+        const matches = specifiers.some((specifier) => {
+          if (!specifier || !specifier.local?.name) {
             return false;
           }
           return specifier.local.name === componentName;
@@ -1425,7 +1623,7 @@ export abstract class BaseUpdateService {
     className: string,
     text: string,
     serviceName: string
-  ): { matchedNode: any; matchedPath: any } | null {
+  ): { matchedNode: JSXElement; matchedPath: ASTPath<JSXElement> } | null {
     if (candidates.length === 0) {
       return null;
     }
@@ -1452,8 +1650,8 @@ export abstract class BaseUpdateService {
     });
 
     return {
-      matchedNode: bestMatch.node,
-      matchedPath: bestMatch.path,
+      matchedNode: bestMatch.node as JSXElement,
+      matchedPath: bestMatch.path as ASTPath<JSXElement>,
     };
   }
 
@@ -1467,20 +1665,19 @@ export abstract class BaseUpdateService {
    * @returns Array of candidates
    */
   protected collectCandidateElements(
-    ast: any,
+    ast: ParsedAst,
     possibleNames: string[],
-    textMatcher: (node: any, children: any[]) => boolean
+    textMatcher: (node: JSXElement, children: JSXChildNode[]) => boolean
   ): ElementMatchCandidate[] {
     const candidates: ElementMatchCandidate[] = [];
 
-    ast.findJSXElements().forEach((path: any) => {
+    ast.findJSXElements().forEach((path: ASTPath<JSXElement>) => {
       const { node } = path;
-      const nodeName =
-        node.openingElement?.name?.name ||
-        node.openingElement?.name?.object?.name;
+      const nodeName = resolveJSXElementName(node.openingElement?.name);
 
-      if (possibleNames.includes(nodeName)) {
-        const children = node.children || [];
+      if (nodeName && possibleNames.includes(nodeName)) {
+        const children: JSXChildNode[] =
+          ((node.children as unknown as JSXChildNode[]) || []) as JSXChildNode[];
 
         if (textMatcher(node, children)) {
           candidates.push(createCandidate(node, path));
@@ -1492,19 +1689,22 @@ export abstract class BaseUpdateService {
   }
 
   protected removeNodeFromAst(target: ElementMatchContext): boolean {
-    const matchedPath: any = target.matchedPath;
+    const matchedPath = target.matchedPath;
     if (typeof matchedPath?.prune === "function") {
-      const parentPath = matchedPath.parent;
+      const parentPath = matchedPath.parent as ASTPath<namedTypes.Node> | null;
       matchedPath.prune();
       this.pruneEmptyAncestors(parentPath);
       return true;
     }
 
     if (matchedPath?.parent) {
-      const parent = matchedPath.parent;
-      const parentChildren = parent.value.children;
-      parent.value.children = parentChildren.filter(
-        (child: any) => child !== target.matchedNode
+      const parent = matchedPath.parent as ASTPath<namedTypes.Node>;
+      const parentValue = parent.value as unknown as {
+        children?: JSXChildNode[];
+      };
+      const parentChildren = parentValue.children || [];
+      parentValue.children = parentChildren.filter(
+        (child) => child !== target.matchedNode
       );
       this.pruneEmptyAncestors(parent);
       return true;
@@ -1513,26 +1713,27 @@ export abstract class BaseUpdateService {
     return false;
   }
 
-  private pruneEmptyAncestors(path: any): void {
+  private pruneEmptyAncestors(
+    path: ASTPath<namedTypes.Node> | null | undefined
+  ): void {
     let current = path;
 
     while (current && current.value) {
       const node = current.value;
 
-      if (
-        node.type !== "JSXElement" &&
-        node.type !== "JSXFragment"
-      ) {
+      if (node.type !== "JSXElement" && node.type !== "JSXFragment") {
         break;
       }
 
-      const children = node.children || [];
-      const hasMeaningfulChild = children.some((child: any) => {
+      const children: JSXChildNode[] =
+        (node as unknown as { children?: JSXChildNode[] }).children || [];
+      const hasMeaningfulChild = children.some((child) => {
         if (!child) {
           return false;
         }
         if (child.type === "JSXText") {
-          return child.value && child.value.trim().length > 0;
+          const value = (child as JSXText).value;
+          return typeof value === "string" && value.trim().length > 0;
         }
         return true;
       });
@@ -1542,7 +1743,10 @@ export abstract class BaseUpdateService {
       }
 
       if (typeof current.prune === "function") {
-        const parent = current.parent;
+        const parent = current.parent as
+          | ASTPath<namedTypes.Node>
+          | null
+          | undefined;
         current.prune();
         current = parent;
         continue;
@@ -1550,7 +1754,7 @@ export abstract class BaseUpdateService {
 
       if (current.parent?.value?.children) {
         current.parent.value.children = current.parent.value.children.filter(
-          (child: any) => child !== node
+          (child: JSXChildNode) => child !== (node as unknown as JSXChildNode)
         );
         current = current.parent;
         continue;
@@ -1562,7 +1766,7 @@ export abstract class BaseUpdateService {
 
   protected async writeFormattedSource(
     filePath: string,
-    ast: any,
+    ast: { toSource(): string },
     originalSource: string
   ): Promise<boolean> {
     const newSource = ast.toSource();
@@ -1601,9 +1805,10 @@ export abstract class BaseUpdateService {
     );
   }
 
-  protected collectNodeTextInfo(
-    children: any[]
-  ): { text: string; hasDynamicContent: boolean } {
+  protected collectNodeTextInfo(children: JSXChildNode[]): {
+    text: string;
+    hasDynamicContent: boolean;
+  } {
     const parts: string[] = [];
     let hasDynamicContent = false;
 
@@ -1612,13 +1817,13 @@ export abstract class BaseUpdateService {
         continue;
       }
 
-      if (child.type === "JSXText" && child.value) {
-        parts.push(child.value);
+      if (child.type === "JSXText" && (child as JSXText).value) {
+        parts.push((child as JSXText).value as string);
         continue;
       }
 
       if (child.type === "JSXExpressionContainer") {
-        const expression = child.expression;
+        const expression = (child as JSXExpressionContainer).expression;
         if (!expression || expression.type === "JSXEmptyExpression") {
           continue;
         }
@@ -1633,7 +1838,9 @@ export abstract class BaseUpdateService {
       }
 
       if (child.type === "JSXElement") {
-        const nestedInfo = this.collectNodeTextInfo(child.children || []);
+        const nestedInfo = this.collectNodeTextInfo(
+          ((child as JSXElement).children || []) as JSXChildNode[]
+        );
         if (nestedInfo.text) {
           parts.push(nestedInfo.text);
         }
@@ -1655,7 +1862,7 @@ export abstract class BaseUpdateService {
     };
   }
 
-  protected extractNodeText(children: any[]): string {
+  protected extractNodeText(children: JSXChildNode[]): string {
     const { text } = this.collectNodeTextInfo(children);
     return this.normalizeText(text);
   }

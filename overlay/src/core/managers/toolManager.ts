@@ -41,8 +41,8 @@ export class ToolManager {
   private fontFamilyTool: FontFamilyTool;
   private colorTool: ColorTool;
   private deleteTool: DeleteTool;
-  private currentTool: ToolKind | null = null; // Start with no tool selected
-  private toolActive = false; // Track if any tool is currently active
+  private currentTool: ToolKind | null = null;
+  private toolActive = false;
   private selectedElement: HTMLElement | null = null;
   private selectedElementInfo: SanitizedElementInfo | null = null;
 
@@ -92,10 +92,8 @@ export class ToolManager {
       },
     });
 
-    // Listen for Pro tool activation to deactivate core tools
     this.document.addEventListener("brakit:pro-tool-change", ((event: CustomEvent) => {
       const tool = event.detail?.tool;
-      // If a Pro tool is activated (draw, designer), deactivate core tools
       if (tool !== null && this.toolActive) {
         logger.info("[ToolManager] Pro tool activated, deactivating core tools");
         this.handleToolChange(new CustomEvent("tool-change", {
@@ -103,8 +101,6 @@ export class ToolManager {
         }));
       }
     }) as EventListener);
-
-    // Don't activate any tool by default - wait for user interaction
   }
 
   getCurrentTool(): ToolKind | null {
@@ -154,7 +150,6 @@ export class ToolManager {
   }
 
   clearDrawSelection() {
-    // Let optional plugins (e.g. Pro draw/designer) clear their UI overlays
     this.document.dispatchEvent(
       new CustomEvent("brakit:clear-draw-selection")
     );
@@ -173,11 +168,9 @@ export class ToolManager {
     ).detail;
     const requestedTool = detail?.tool;
 
-    // Handle explicit null (deactivate all tools)
     if (requestedTool === null) {
       logger.info("[ToolManager] Deactivating all tools (null requested)");
 
-      // Deactivate current tool
       if (this.toolActive) {
         if (this.currentTool === Tool.Text) {
           this.textEditTool.deactivate();
@@ -214,11 +207,9 @@ export class ToolManager {
                 : Tool.Text;
 
     if (this.currentTool === tool && this.toolActive) {
-      // Don't open modal when clicking the same tool button that's already active
       return;
     }
 
-    // Deactivate current tool
     if (this.toolActive) {
       if (this.currentTool === Tool.Text) {
         this.textEditTool.deactivate();
@@ -275,7 +266,6 @@ export class ToolManager {
         break;
     }
 
-    // Dispatch event to notify Pro plugin that a core tool is now active
     this.document.dispatchEvent(
       new CustomEvent("brakit:tool-change", {
         detail: { tool },
@@ -283,7 +273,6 @@ export class ToolManager {
     );
   };
 
-  // Cleanup method
   destroy() {
     if (this.toolActive) {
       this.textEditTool.destroy();

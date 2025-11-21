@@ -1,5 +1,13 @@
 import fs from "fs";
-import jscodeshift from "jscodeshift";
+import jscodeshift, {
+  type JSXAttribute,
+  type JSXElement,
+  type JSXExpressionContainer,
+} from "jscodeshift";
+import type { namedTypes } from "ast-types";
+
+type TemplateExpression = Parameters<typeof jscodeshift.templateLiteral>[1][number];
+type AllowedExpression = Extract<TemplateExpression, namedTypes.Expression>;
 import { BaseUpdateService } from "../shared/BaseUpdateService";
 import { BaseUpdateResult } from "../shared/types";
 import { logger } from "../../utils/logger";
@@ -61,8 +69,7 @@ export class FontSizeUpdateService extends BaseUpdateService {
   }
 
   private ensureTemplateLiteralHasFontSize(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    template: any,
+    template: namedTypes.TemplateLiteral,
     newSize: string
   ): boolean {
     const replaceRegex = this.createFontSizeRegex("g");
@@ -71,8 +78,7 @@ export class FontSizeUpdateService extends BaseUpdateService {
     let updated = false;
     let hadSizeToken = false;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    template.quasis?.forEach((quasi: any) => {
+    template.quasis?.forEach((quasi) => {
       const cooked = quasi?.value?.cooked ?? "";
       if (!cooked) {
         return;
@@ -100,10 +106,8 @@ export class FontSizeUpdateService extends BaseUpdateService {
     }
 
     const staticText =
-      template.quasis
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ?.map((quasi: any) => quasi?.value?.cooked ?? "")
-        .join("") ?? "";
+      template.quasis?.map((quasi) => quasi?.value?.cooked ?? "").join("") ??
+      "";
     if (staticText.split(/\s+/).includes(newSize)) {
       return updated;
     }
@@ -130,11 +134,9 @@ export class FontSizeUpdateService extends BaseUpdateService {
   }
 
   private wrapExpressionWithFontSize(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expression: any,
+    expression: AllowedExpression,
     newSize: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): any {
+  ): JSXExpressionContainer {
     const template = jscodeshift.templateLiteral(
       [
         jscodeshift.templateElement({ cooked: "", raw: "" }, false),
@@ -143,7 +145,7 @@ export class FontSizeUpdateService extends BaseUpdateService {
           true
         ),
       ],
-      [expression]
+      [expression] as Parameters<typeof jscodeshift.templateLiteral>[1]
     );
 
     return jscodeshift.jsxExpressionContainer(template);
@@ -200,13 +202,14 @@ export class FontSizeUpdateService extends BaseUpdateService {
       let updated = false;
       let warningResult: BaseUpdateResult | null = null;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const matcher = (node: any, children: any[]) => {
-        return this.createTextOrClassNameMatcher(lookupText, className, oldSize)(
+      const matcher = (
+        node: JSXElement,
+        children: Array<namedTypes.Node | null | undefined>
+      ) =>
+        this.createTextOrClassNameMatcher(lookupText, className, oldSize)(
           node,
           children
         );
-      };
 
       const match = this.findLocalElementMatch({
         filePath,
@@ -224,8 +227,8 @@ export class FontSizeUpdateService extends BaseUpdateService {
           (match.matchedNode.openingElement.attributes = []);
 
         let classAttr = attributes.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (attr: any) => attr.name?.name === "className"
+          (attr): attr is JSXAttribute =>
+            attr?.type === "JSXAttribute" && attr.name?.name === "className"
         );
 
         const riskWarning = this.checkSmartEditRisk({
@@ -236,7 +239,7 @@ export class FontSizeUpdateService extends BaseUpdateService {
           forceGlobal,
         });
 
-        if (riskWarning) {
+        if (riskWarning && !match.hasInlineClassName) {
           warningResult = riskWarning;
         } else {
           if (!classAttr) {
@@ -253,36 +256,42 @@ export class FontSizeUpdateService extends BaseUpdateService {
             classAttr.value.type === "StringLiteral" ||
             classAttr.value.type === "Literal"
           ) {
+            const literal = classAttr.value as
+              | namedTypes.StringLiteral
+              | namedTypes.Literal;
             const result = this.ensureStringHasFontSize(
-              classAttr.value.value || "",
+              typeof literal.value === "string" ? literal.value : "",
               newSize
             );
             if (result.updated) {
-              classAttr.value.value = result.value;
+              literal.value = result.value;
               updated = true;
             } else if (result.hadSizeToken) {
               updated = true;
             }
           } else if (classAttr.value.type === "JSXExpressionContainer") {
-            const expression = classAttr.value.expression;
+            const expression = (classAttr.value as JSXExpressionContainer)
+              .expression as namedTypes.Expression | null;
 
             if (
               expression?.type === "StringLiteral" ||
               expression?.type === "Literal"
             ) {
               const result = this.ensureStringHasFontSize(
-                expression.value || "",
+                typeof (expression as namedTypes.Literal).value === "string"
+                  ? ((expression as namedTypes.Literal).value as string)
+                  : "",
                 newSize
               );
               if (result.updated) {
-                expression.value = result.value;
+                (expression as namedTypes.Literal).value = result.value;
                 updated = true;
               } else if (result.hadSizeToken) {
                 updated = true;
               }
             } else if (expression?.type === "TemplateLiteral") {
               const changed = this.ensureTemplateLiteralHasFontSize(
-                expression,
+                expression as namedTypes.TemplateLiteral,
                 newSize
               );
               if (changed) {
@@ -290,7 +299,7 @@ export class FontSizeUpdateService extends BaseUpdateService {
               }
             } else if (expression) {
               classAttr.value = this.wrapExpressionWithFontSize(
-                expression,
+                expression as TemplateExpression,
                 newSize
               );
               updated = true;
@@ -312,15 +321,15 @@ export class FontSizeUpdateService extends BaseUpdateService {
         success: false,
         error: `Font size class "${oldSize}" not found in <${tag}> element with text "${lookupText}"`,
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       logger.error({
         message: `[FontSizeUpdate] Error`,
         context: {
-          error: error instanceof Error ? error.message : String(error),
+          error: message,
         },
       });
-      return { success: false, error: error.message };
+      return { success: false, error: message };
     }
   }
 }

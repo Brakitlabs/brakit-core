@@ -43,13 +43,11 @@ const proBundlePath = process.env.BRAKIT_PRO_BUNDLE_PATH;
 
 app.use(bodyParser.json());
 
-// Enable CORS for all routes
 app.use(
   cors({
     origin:
       config.cors.origins === undefined
-        ? // Development: Allow any localhost/127.0.0.1 on any port
-          (origin, callback) => {
+        ? (origin, callback) => {
             if (
               !origin ||
               /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
@@ -60,15 +58,14 @@ app.use(
             }
           }
         : config.cors.origins.length > 0
-          ? config.cors.origins // Explicit CORS origins
-          : false, // Production: Disable CORS if no origins specified (safety)
+          ? config.cors.origins
+          : false,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// Serve overlay file
 app.get("/brakit-overlay.js", (req, res) => {
   const overlayPath = path.join(
     __dirname,
@@ -81,12 +78,10 @@ app.get("/brakit-overlay.js", (req, res) => {
   }
 });
 
-// Initialize Plugin Manager
 const projectPath = process.env.BRAKIT_PROJECT_PATH || process.cwd();
 import PluginManager from "./plugins/pluginManager";
 const pluginManager = new PluginManager(projectPath);
 
-// Serve plugin bundles dynamically
 app.get("/plugins/:pluginName.js", (req, res) => {
   const { pluginName } = req.params;
   const content = pluginManager.getPluginContent(pluginName);
@@ -105,7 +100,6 @@ app.get("/plugins/:pluginName.js", (req, res) => {
   res.send(content);
 });
 
-// Routes
 app.use("/api/health", healthRouter);
 app.use("/api/editor/context", contextRouter);
 app.use("/api/editor/folders", foldersRouter);

@@ -39,22 +39,18 @@ function calculateClassSimilarity(
       .filter(Boolean)
   );
 
-  // If both are empty, consider them equal
   if (clickedClasses.size === 0 && candidateClasses.size === 0) {
     return 1.0;
   }
 
-  // If one is empty and the other is not, no match
   if (clickedClasses.size === 0 || candidateClasses.size === 0) {
     return 0;
   }
 
-  // Calculate intersection
   const intersection = new Set(
     Array.from(clickedClasses).filter((c) => candidateClasses.has(c))
   );
 
-  // Jaccard similarity: intersection / union
   const union = new Set([...clickedClasses, ...candidateClasses]);
   const similarity = intersection.size / union.size;
 
@@ -71,16 +67,13 @@ function extractClassName(node: any): string {
 
   for (const attr of node.openingElement.attributes) {
     if (attr.type === "JSXAttribute" && attr.name?.name === "className") {
-      // Handle different className value types
       if (attr.value?.type === "StringLiteral") {
         return attr.value.value || "";
       } else if (attr.value?.type === "JSXExpressionContainer") {
-        // For template literals or simple string expressions
         const expression = attr.value.expression;
         if (expression?.type === "StringLiteral") {
           return expression.value || "";
         } else if (expression?.type === "TemplateLiteral") {
-          // Extract static parts only (ignore dynamic expressions)
           const staticParts =
             expression.quasis?.map((q: any) => q.value.cooked).join(" ") || "";
           return staticParts;
@@ -164,7 +157,6 @@ function extractText(node: any): string {
     if (child.type === "JSXText" && child.value) {
       texts.push(child.value);
     } else if (child.type === "JSXExpressionContainer") {
-      // We can't easily extract dynamic text, but we note its presence
       texts.push("[dynamic]");
     }
   }
@@ -190,7 +182,6 @@ export function findBestMatch(
     return null;
   }
 
-  // If only one candidate, return it (no ambiguity)
   if (candidates.length === 1) {
     return {
       node: candidates[0].node,
@@ -211,7 +202,6 @@ export function findBestMatch(
 
   const normalizedClickedText = normalizeText(clickedText);
 
-  // Score each candidate
   const scored = candidates.map((candidate) => {
     const classSimilarity = calculateClassSimilarity(
       clickedClassName,
@@ -232,7 +222,6 @@ export function findBestMatch(
       ? 0.3
       : 0;
 
-    // Text match is a tiebreaker (less important than className)
     const textMatch =
       normalizedClickedText && candidate.text.includes(normalizedClickedText)
         ? 0.1
@@ -265,7 +254,6 @@ export function findBestMatch(
     };
   });
 
-  // Sort by score descending
   scored.sort((a, b) => b.score - a.score);
 
   const best = scored[0];
@@ -307,7 +295,6 @@ export function findBestMatch(
     return null;
   }
 
-  // If the best score is significantly better than the second best, return it
   if (best.score > secondBest.score + 0.1) {
     logger.info({
       message: "[ElementMatcher] Best match found",
@@ -331,7 +318,6 @@ export function findBestMatch(
     return best;
   }
 
-  // If scores are too close, we're not confident
   logger.warn({
     message: "[ElementMatcher] Ambiguous match, scores too close",
     context: {

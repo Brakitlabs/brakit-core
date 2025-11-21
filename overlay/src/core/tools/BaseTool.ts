@@ -69,6 +69,7 @@ export abstract class BaseTool {
         element.closest("brakit-modal") ||
         element.closest("brakit-toast") ||
         element.closest("brakit-smart-edit-warning") ||
+        element.closest("brakit-page-builder") ||
         element.closest("brakit-delete-confirmation") ||
         element.closest(".brakit-floating-toolbar") ||
         element.closest(".brakit-toolbar-handle") ||

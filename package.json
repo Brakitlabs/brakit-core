@@ -1,6 +1,6 @@
 {
   "name": "brakit",
-  "version": "0.5.11",
+  "version": "0.5.12",
   "description": "AI-powered visual code editing tool with real-time web interaction",
   "main": "dist/index.js",
   "publishConfig": {

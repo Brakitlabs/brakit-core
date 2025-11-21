@@ -62,12 +62,10 @@ export async function startCommand(options?: {
   const discoveredPlugins = PluginScanner.scan(projectDir);
   const plugins = discoveredPlugins.map(p => p.name);
 
-  // Minimal header
   console.log("");
   console.log(chalk.cyan(`  ⚡ Brakit v${packageJson.version}`));
   console.log("");
 
-  // Check for updates (non-blocking, cached daily)
   await checkForUpdates({ isVerbose });
 
   try {
@@ -84,7 +82,6 @@ export async function startCommand(options?: {
       runtimeHost === "0.0.0.0" ? "localhost" : runtimeHost;
     const backendHealthUrl = `http://${backendClientHost}:${runtimePorts.backendPort}/api/health`;
 
-    // Start app and backend in parallel
     await Promise.all([
       (async () => {
         await startUserApp(projectDir, runtimePorts.appPort);
@@ -205,11 +202,9 @@ async function startUserApp(
     }
   );
 
-  // Only show errors
   if (!isVerbose && userAppProcess.stderr) {
     userAppProcess.stderr.on("data", (data: Buffer) => {
       const message = data.toString();
-      // Only show actual errors, not warnings
       if (message.toLowerCase().includes("error")) {
         process.stderr.write(data);
       }
@@ -253,11 +248,9 @@ async function startBackend(
       : ["ignore", "ignore", "pipe"],
   });
 
-  // Only show errors
   if (!isVerbose && backendProcess.stderr) {
     backendProcess.stderr.on("data", (data: Buffer) => {
       const message = data.toString();
-      // Only show actual errors, not warnings
       if (message.toLowerCase().includes("error")) {
         process.stderr.write(data);
       }
@@ -372,15 +365,11 @@ async function waitForPort(port: number, timeout = 30_000): Promise<void> {
     try {
       const availablePort = await detectPort(port);
       if (availablePort !== port) {
-        // Port is occupied, which means service bound to it
         return;
       }
-    } catch (err) {
-      // ignore and continue polling
-    }
+    } catch (err) {}
 
     attempt++;
-    // Exponential backoff: 100ms -> 200ms -> 400ms -> 800ms -> 1000ms (max)
     const delay = Math.min(100 * Math.pow(2, attempt - 1), 1000);
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
@@ -400,14 +389,11 @@ async function waitForHttpHealth(url: string, timeout = 30_000): Promise<void> {
       });
 
       if (response.ok) {
-        return; // Service is healthy!
+        return;
       }
-    } catch (err) {
-      // Service not ready yet, continue polling
-    }
+    } catch (err) {}
 
     attempt++;
-    // Exponential backoff: 100ms -> 200ms -> 400ms -> 800ms -> 1000ms (max)
     const delay = Math.min(100 * Math.pow(2, attempt - 1), 1000);
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
@@ -445,17 +431,14 @@ function cleanup(): void {
 
 function killProcessCrossPlatform(proc: ChildProcess): void {
   if (process.platform === "win32") {
-    // On Windows, kill the entire process tree
     try {
       spawn("taskkill", ["/pid", String(proc.pid), "/f", "/t"], {
         stdio: "ignore",
       });
     } catch (err) {
-      // Fallback to standard kill
       proc.kill("SIGKILL");
     }
   } else {
-    // On Unix, send SIGTERM first, then SIGKILL if needed
     proc.kill("SIGTERM");
     setTimeout(() => {
       if (proc.exitCode === null) {

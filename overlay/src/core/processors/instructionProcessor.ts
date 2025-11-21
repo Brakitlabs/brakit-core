@@ -218,7 +218,6 @@ export class InstructionProcessor {
       this.completeStatusStep("prepare");
       this.activateStatusStep("send");
 
-      // Dispatch event for plugins to handle
       const response = await new Promise<any>((resolve, reject) => {
         const requestId = Math.random().toString(36).substring(7);
         
@@ -231,7 +230,6 @@ export class InstructionProcessor {
 
         document.addEventListener("brakit:instruction-response", handleResponse as EventListener);
 
-        // Timeout after 120s
         setTimeout(() => {
           document.removeEventListener("brakit:instruction-response", handleResponse as EventListener);
           reject(new Error("Instruction submission timed out"));
@@ -560,7 +558,6 @@ export class InstructionProcessor {
     return lines[lines.length - 1] || "Changes applied successfully.";
   }
 
-  // Public interface methods
   getCurrentModalMode(): ModalMode | null {
     return this.currentModalMode;
   }
@@ -581,7 +578,6 @@ export class InstructionProcessor {
     return this.isSubmittingState;
   }
 
-  // Event handlers for external access
   onModalUndo = () => this.handleUndoRequest("modal");
   onToolbarUndo = () => this.handleUndoRequest("toolbar");
 }
