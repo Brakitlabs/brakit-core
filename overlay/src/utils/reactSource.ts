@@ -1,5 +1,3 @@
-// Utility functions for extracting React source information from DOM elements
-
 export interface ReactSourceInfo {
   fileName?: string;
   lineNumber?: number;
@@ -44,11 +42,9 @@ export function getReactSourceInfo(element: HTMLElement): ReactSourceInfo {
   const maxDomTraverse = 10;
 
   try {
-    // Try different ways to access React fiber
     const reactFiber = getReactFiber(element);
 
     if (reactFiber) {
-      // Traverse up the Fiber tree to find source information
       let currentFiber = reactFiber;
       let traverseCount = 0;
       let preferredComponentName: string | undefined;
@@ -73,7 +69,6 @@ export function getReactSourceInfo(element: HTMLElement): ReactSourceInfo {
 
         const componentName = getComponentDisplayName(currentFiber);
 
-        // If we found a component name and it's not a DOM element, use it
         if (componentName && typeof currentFiber.type === "function") {
           if (!preferredComponentName && !isFrameworkComponentName(componentName)) {
             preferredComponentName = componentName;
@@ -87,7 +82,6 @@ export function getReactSourceInfo(element: HTMLElement): ReactSourceInfo {
           }
         }
 
-        // Move up the tree
         currentFiber = currentFiber.return;
         traverseCount++;
       }
@@ -110,7 +104,6 @@ export function getReactSourceInfo(element: HTMLElement): ReactSourceInfo {
         }
       }
 
-      // Extract props from original fiber
       if (reactFiber.memoizedProps) {
         const sanitizedProps = sanitizeProps(reactFiber.memoizedProps);
         if (sanitizedProps !== undefined) {
@@ -119,13 +112,11 @@ export function getReactSourceInfo(element: HTMLElement): ReactSourceInfo {
       }
     }
 
-    // Fallback: try to find React source in element properties
     if (!sourceInfo.fileName && (element as any).__source) {
       sourceInfo.fileName = (element as any).__source.fileName;
       sourceInfo.lineNumber = (element as any).__source.lineNumber;
     }
 
-    // Fallback: try to find React source in parent DOM elements
     if (!sourceInfo.fileName) {
       let parent = element.parentElement;
       let domTraverseCount = 0;
@@ -138,7 +129,6 @@ export function getReactSourceInfo(element: HTMLElement): ReactSourceInfo {
         const parentFiber = getReactFiber(parent);
 
         if (parentFiber) {
-          // Traverse up this parent's Fiber tree
           let currentFiber = parentFiber;
           let fiberTraverseCount = 0;
 
@@ -173,10 +163,6 @@ export function getReactSourceInfo(element: HTMLElement): ReactSourceInfo {
   return sourceInfo;
 }
 
-/**
- * Gets React fiber from DOM element
- * Tries multiple approaches to find the React fiber
- */
 function getReactFiber(element: HTMLElement): any {
   // Try React 18+ approach
   if ((element as any)._reactInternals) {
@@ -188,12 +174,10 @@ function getReactFiber(element: HTMLElement): any {
     return (element as any)._reactInternalFiber;
   }
 
-  // Try React 16 approach
   if ((element as any).__reactInternalInstance) {
     return (element as any).__reactInternalInstance;
   }
 
-  // Try React DevTools approach
   const key = Object.keys(element).find(
     (key) =>
       key.startsWith("__reactInternalInstance") ||
@@ -354,15 +338,12 @@ function truncateString(value: string): string {
 export function generateElementSelector(element: HTMLElement): string {
   const parts: string[] = [];
 
-  // Add tag name
   parts.push(element.tagName.toLowerCase());
 
-  // Add ID if present
   if (element.id) {
     parts.push(`#${element.id}`);
   }
 
-  // Add classes if present
   if (element.className && typeof element.className === "string") {
     const classes = element.className.trim().split(/\s+/);
     classes.forEach((cls) => {
@@ -370,7 +351,6 @@ export function generateElementSelector(element: HTMLElement): string {
     });
   }
 
-  // Add nth-child if needed for uniqueness
   const parent = element.parentElement;
   if (parent) {
     const siblings = Array.from(parent.children);

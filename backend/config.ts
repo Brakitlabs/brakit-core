@@ -1,8 +1,6 @@
 import { config as loadEnv } from "dotenv";
 import path from "path";
 
-// Load environment variables from .env file in backend directory
-// When compiled, __dirname points to backend/dist, so we go up one level
 const envPath = path.resolve(__dirname, "../.env");
 loadEnv({ path: envPath });
 
@@ -21,10 +19,9 @@ export const server = {
  * CORS Configuration
  */
 export const cors = {
-  // Parse CORS origins from environment variable
   origins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(",").map((origin) => origin.trim())
-    : undefined, // undefined = use dynamic localhost in development
+    : undefined,
 };
 
 

@@ -80,7 +80,7 @@ export class TextUpdateService extends BaseUpdateService {
           forceGlobal,
         });
 
-        if (riskWarning) {
+        if (riskWarning && !localMatch.hasInlineClassName) {
           warningResult = riskWarning;
           found = true;
         } else {

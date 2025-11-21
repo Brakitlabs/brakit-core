@@ -103,9 +103,7 @@ export class DraggableOverlay {
 
     try {
       this.handle.releasePointerCapture(this.pointerId);
-    } catch {
-      // ignore: pointer capture may already be released
-    }
+    } catch {}
 
     this.pointerId = null;
     window.removeEventListener("pointermove", this.boundPointerMove, true);

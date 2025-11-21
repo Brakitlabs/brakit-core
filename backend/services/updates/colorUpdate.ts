@@ -4,6 +4,13 @@ import {
   ComponentUsageMatch,
   ProjectComponentUsageMatch,
 } from "../shared/BaseUpdateService";
+import type {
+  JSXAttribute,
+  JSXElement,
+  JSXExpressionContainer,
+  JSXSpreadAttribute,
+} from "jscodeshift";
+import type { namedTypes } from "ast-types";
 import { BaseUpdateResult } from "../shared/types";
 import { logger } from "../../utils/logger";
 
@@ -155,16 +162,24 @@ export class ColorUpdateService extends BaseUpdateService {
 
     let updated = false;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const matcher = (node: any, children: any[]) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const attributes: any[] = node.openingElement?.attributes || [];
+    const matcher = (
+      node: JSXElement,
+      children: Array<namedTypes.Node | JSXExpressionContainer | null | undefined>
+    ) => {
+      const attributes: Array<JSXAttribute | JSXSpreadAttribute> =
+        node.openingElement?.attributes || [];
       let referencesProps = false;
 
       // Check children for prop references
       for (const child of children) {
         if (child?.type === "JSXExpressionContainer") {
-          if (this.expressionReferencesProps(child.expression, propSet)) {
+          const exprChild = child as JSXExpressionContainer;
+          if (
+            this.expressionReferencesProps(
+              exprChild.expression as namedTypes.Node,
+              propSet
+            )
+          ) {
             referencesProps = true;
             break;
           }
@@ -174,9 +189,16 @@ export class ColorUpdateService extends BaseUpdateService {
       // Check attributes for prop references
       if (!referencesProps) {
         for (const attr of attributes) {
-          if (attr?.value?.type === "JSXExpressionContainer") {
+          if (
+            attr?.type === "JSXAttribute" &&
+            attr.value?.type === "JSXExpressionContainer"
+          ) {
+            const attrValue = attr.value as JSXExpressionContainer;
             if (
-              this.expressionReferencesProps(attr.value.expression, propSet)
+              this.expressionReferencesProps(
+                attrValue.expression as namedTypes.Node,
+                propSet
+              )
             ) {
               referencesProps = true;
               break;
@@ -199,24 +221,32 @@ export class ColorUpdateService extends BaseUpdateService {
     });
 
     if (elementMatch) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const attributes: any[] =
+      const attributes: Array<JSXAttribute | JSXSpreadAttribute> =
         elementMatch.matchedNode.openingElement?.attributes || [];
       const classAttr = attributes.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (attr: any) => attr?.name?.name === "className"
+        (attr): attr is JSXAttribute =>
+          attr?.type === "JSXAttribute" && attr.name?.name === "className"
       );
 
       if (!classAttr) {
         return null;
       }
 
-      if (!classAttr.value || typeof classAttr.value.value !== "string") {
+      if (
+        !classAttr.value ||
+        (classAttr.value.type !== "StringLiteral" &&
+          classAttr.value.type !== "Literal")
+      ) {
         return null;
       }
 
+      const literal = classAttr.value as
+        | namedTypes.StringLiteral
+        | namedTypes.Literal;
+      const literalValue = typeof literal.value === "string" ? literal.value : "";
+
       const { classValue, changed } = this.updateClassValue(
-        classAttr.value.value || "",
+        literalValue || "",
         textColor,
         backgroundColor,
         hoverBackgroundColor
@@ -233,7 +263,7 @@ export class ColorUpdateService extends BaseUpdateService {
         return null;
       }
 
-      classAttr.value.value = classValue.trim();
+      literal.value = classValue.trim();
       updated = true;
     }
 
@@ -317,8 +347,8 @@ export class ColorUpdateService extends BaseUpdateService {
 
       if (localMatch) {
         const classAttr = localMatch.matchedNode.openingElement.attributes?.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (attr: any) => attr.name?.name === "className"
+          (attr): attr is JSXAttribute =>
+            attr?.type === "JSXAttribute" && attr.name?.name === "className"
         );
 
         const riskWarning = this.checkSmartEditRisk({
@@ -329,18 +359,51 @@ export class ColorUpdateService extends BaseUpdateService {
           forceGlobal,
         });
 
-        if (riskWarning) {
+        if (riskWarning && !localMatch.hasInlineClassName) {
           warningResult = riskWarning;
           found = true;
         } else if (classAttr && classAttr.value) {
           const { classValue } = this.updateClassValue(
-            classAttr.value.value || "",
+            ((): string => {
+              const val = classAttr.value;
+              if (!val) {
+                return "";
+              }
+              if (val.type === "StringLiteral" || val.type === "Literal") {
+                const literalVal = val as namedTypes.Literal;
+                return typeof literalVal.value === "string"
+                  ? (literalVal.value as string) || ""
+                  : "";
+              }
+              if (val.type === "JSXExpressionContainer") {
+                const expr = (val as JSXExpressionContainer)
+                  .expression as namedTypes.Node | null;
+                if (expr && expr.type === "Literal") {
+                  const literalExpr = expr as namedTypes.Literal;
+                  return typeof literalExpr.value === "string"
+                    ? (literalExpr.value as string)
+                    : "";
+                }
+              }
+              return "";
+            })(),
             textColor,
             backgroundColor,
             hoverBackgroundColor
           );
 
-          classAttr.value.value = classValue;
+          if (
+            classAttr.value.type === "StringLiteral" ||
+            classAttr.value.type === "Literal"
+          ) {
+            (classAttr.value as namedTypes.Literal).value = classValue;
+          } else if (classAttr.value.type === "JSXExpressionContainer") {
+            const expr = (classAttr.value as JSXExpressionContainer)
+              .expression as namedTypes.Node;
+            if (expr && expr.type === "Literal") {
+              (expr as namedTypes.Literal).value = classValue;
+            }
+          }
           found = true;
         } else if (!classAttr) {
           warningResult = {

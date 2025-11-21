@@ -63,7 +63,6 @@ export class DeleteTool extends BaseTool {
   protected onDestroy(): void {
     this.cleanup();
 
-    // Clean up the confirmation dialog
     if (this.confirmationDialog) {
       this.confirmationDialog.remove();
       this.confirmationDialog = null;
@@ -71,7 +70,6 @@ export class DeleteTool extends BaseTool {
   }
 
   private initializeDialog() {
-    // Create the confirmation dialog
     this.confirmationDialog = new DeleteConfirmationDialog();
 
     DialogInitializer.appendToBodySafe(
@@ -97,7 +95,6 @@ export class DeleteTool extends BaseTool {
   private handlePointerMove = (event: PointerEvent) => {
     if (!this.active || this.selectedElement || this.dialogOpen) return;
 
-    // Use shared click ignore logic
     const target = event.target as HTMLElement;
     if (this.shouldIgnoreClick(target)) {
       this.clearHover();
@@ -119,7 +116,6 @@ export class DeleteTool extends BaseTool {
   private handleClick = (event: MouseEvent) => {
     if (!this.active || this.dialogOpen) return;
 
-    // Use shared click ignore logic
     const target = event.target as HTMLElement;
     if (this.shouldIgnoreClick(target)) {
       return;
@@ -144,10 +140,8 @@ export class DeleteTool extends BaseTool {
 
     this.handleEscapeKey(event, () => {
       if (this.selectedElement) {
-        // Cancel current delete operation
         this.cancelDelete();
       } else {
-        // Deactivate delete tool entirely
         this.deactivate();
       }
     });
@@ -164,7 +158,6 @@ export class DeleteTool extends BaseTool {
   }
 
   private shouldIgnore(element: HTMLElement): boolean {
-    // Use the shared overlay element detection from BaseTool
     return this.shouldIgnoreOverlayElement(element);
   }
 
@@ -180,12 +173,10 @@ export class DeleteTool extends BaseTool {
     this.selectedElement = element;
     this.highlightElement(element);
 
-    // Show confirmation dialog
     this.showDeleteConfirmation(element);
   }
 
   private showDeleteConfirmation(element: HTMLElement) {
-    // Double-check that we're not targeting overlay elements
     if (this.shouldIgnore(element)) {
       logger.warn("[DeleteTool] Attempted to delete overlay element, ignoring");
       return;
@@ -198,7 +189,6 @@ export class DeleteTool extends BaseTool {
       componentName = element.tagName.toLowerCase();
     }
 
-    // Additional check for overlay-related component names
     const lowerName = componentName.toLowerCase();
     if (lowerName.includes("overlay") || lowerName.includes("toolbar")) {
       logger.warn(
@@ -217,7 +207,6 @@ export class DeleteTool extends BaseTool {
     // Try to determine the current page file from the URL
     const currentPageFile = this.getCurrentPageFile();
 
-    // Create data object with the required structure
     this.pendingDeleteData = {
       file: metadata.filePath || currentPageFile || "unknown",
       tag: componentName,
@@ -259,15 +248,10 @@ export class DeleteTool extends BaseTool {
 
   private getCurrentPageFile(): string | null {
     try {
-      // Try to determine the current page from the URL
       const pathname =
         this.document.location?.pathname || window.location?.pathname;
       if (!pathname) return null;
 
-      // Convert URL path to file path
-      // e.g., /dashboard -> dashboard/page.tsx
-      // e.g., /products -> products/page.tsx
-      // e.g., / -> page.tsx
       let filePath =
         pathname === "/" ? "page.tsx" : `${pathname.substring(1)}/page.tsx`;
 

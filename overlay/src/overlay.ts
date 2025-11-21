@@ -176,6 +176,7 @@ class BrakitOverlayApp {
   }
 
   private openPageBuilderModal() {
+    this.deactivateActiveTools();
     this.ensurePageBuilderModal();
     const modal = this.pageBuilderModal;
     if (!modal) {
@@ -363,6 +364,11 @@ class BrakitOverlayApp {
     document.addEventListener("brakit:new-page", () => {
       this.openPageBuilderModal();
     });
+  }
+
+  private deactivateActiveTools() {
+    this.subsystems.toolManager.setTool(null);
+    this.subsystems.floatingToolbar.setActiveTool(null);
   }
 
   /**
