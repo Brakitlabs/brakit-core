@@ -2,6 +2,12 @@
 
 Brakit Core is the open-source foundation for AI-assisted visual editing. It provides the essential infrastructure to connect a browser-based overlay to a local development server, enabling real-time code manipulation.
 
+<div align="center">
+
+[**Architecture**](./ARCHITECTURE.md) • [**Contributing**](./CONTRIBUTING.md) • [**Plugin Dev**](./PLUGIN_DEVELOPMENT.md)
+
+</div>
+
 ## High-Level Overview
 
 The system consists of three main components:

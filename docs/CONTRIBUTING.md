@@ -2,6 +2,12 @@
 
 Thank you for your interest in contributing to Brakit Core! We want to make this project as open and accessible as possible.
 
+<div align="center">
+
+[**Architecture**](./ARCHITECTURE.md) • [**Contributing**](./CONTRIBUTING.md) • [**Plugin Dev**](./PLUGIN_DEVELOPMENT.md)
+
+</div>
+
 ## Getting Started
 
 1.  **Fork the repository** and clone it locally.

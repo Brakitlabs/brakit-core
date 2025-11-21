@@ -4,11 +4,22 @@ AI-assisted visual editing for modern Next.js & React codebases. Brakit connects
 
 > **Status:** Public beta — production-ready for local development on Node.js 20+ with Next.js 13/14 (App Router) or React 18 projects.
 
+<div align="center">
+
+[![npm version](https://img.shields.io/npm/v/brakit.svg?style=flat-square)](https://www.npmjs.com/package/brakit)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+
+[**Architecture**](docs/ARCHITECTURE.md) • [**Contributing**](docs/CONTRIBUTING.md) • [**Plugin Dev**](docs/PLUGIN_DEVELOPMENT.md)
+
+</div>
+
 ---
 
 ## Text Edit Demo
 
-![Text editing demo](https://aehd8eoytkvtjqax.public.blob.vercel-storage.com/Text_Demo.gif)
+<div align="center">
+  <img src="https://aehd8eoytkvtjqax.public.blob.vercel-storage.com/Text_Demo.gif" alt="Text editing demo" width="100%" />
+</div>
 
 ---
 
@@ -69,8 +80,8 @@ Brakit Core is designed to be extensible. It supports a **Generic Plugin System*
 ### Creating Plugins
 You can extend Brakit's functionality by creating custom plugins. Plugins are JavaScript bundles that register with the overlay and can add new tools, UI components, or integrate with external services.
 
-For more details on how the plugin system works, see [ARCHITECTURE.md](./ARCHITECTURE.md).
-To contribute to Core, check out [CONTRIBUTING.md](./CONTRIBUTING.md).
+For more details on how the plugin system works, see [Architecture Guide](docs/ARCHITECTURE.md).
+To contribute to Core, check out [Contributing Guide](docs/CONTRIBUTING.md).
 
 ---
 

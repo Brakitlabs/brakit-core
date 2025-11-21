@@ -2,6 +2,12 @@
 
 ### **NOTE***: This guide is under development and is subject to change. The plugin might not work as expected. Detailed documentation will be available soon.
 
+<div align="center">
+
+[**Architecture**](./ARCHITECTURE.md) • [**Contributing**](./CONTRIBUTING.md) • [**Plugin Dev**](./PLUGIN_DEVELOPMENT.md)
+
+</div>
+
 This guide is a step-by-step tutorial on how to create your first plugin for Brakit.
 
 ## How It Works
