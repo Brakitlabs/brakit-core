@@ -88,6 +88,178 @@ export class ColorUpdateService extends BaseUpdateService {
     return { classValue: tokens.join(" "), changed };
   }
 
+  private updateClassExpression(
+    expr: namedTypes.Node | null | undefined,
+    textColor?: { old: string; new: string },
+    backgroundColor?: { old: string; new: string },
+    hoverBackgroundColor?: { old: string; new: string }
+  ): boolean {
+    if (!expr) {
+      return false;
+    }
+
+    const updateLiteral = (literal: { value: unknown }): boolean => {
+      if (typeof literal.value !== "string") {
+        return false;
+      }
+      const { classValue, changed } = this.updateClassValue(
+        literal.value,
+        textColor,
+        backgroundColor,
+        hoverBackgroundColor
+      );
+      if (changed) {
+        literal.value = classValue;
+      }
+      return changed;
+    };
+
+    switch (expr.type) {
+      case "Literal":
+        return updateLiteral(expr as namedTypes.Literal);
+      case "StringLiteral":
+        return updateLiteral(expr as any);
+      case "ConditionalExpression": {
+        const conditional = expr as namedTypes.ConditionalExpression;
+        const updatedConsequent = this.updateClassExpression(
+          conditional.consequent as namedTypes.Node,
+          textColor,
+          backgroundColor,
+          hoverBackgroundColor
+        );
+        const updatedAlternate = this.updateClassExpression(
+          conditional.alternate as namedTypes.Node,
+          textColor,
+          backgroundColor,
+          hoverBackgroundColor
+        );
+        return updatedConsequent || updatedAlternate;
+      }
+      case "LogicalExpression": {
+        const logical = expr as namedTypes.LogicalExpression;
+        const updatedLeft = this.updateClassExpression(
+          logical.left as namedTypes.Node,
+          textColor,
+          backgroundColor,
+          hoverBackgroundColor
+        );
+        const updatedRight = this.updateClassExpression(
+          logical.right as namedTypes.Node,
+          textColor,
+          backgroundColor,
+          hoverBackgroundColor
+        );
+        return updatedLeft || updatedRight;
+      }
+      case "ArrayExpression": {
+        const arr = expr as namedTypes.ArrayExpression;
+        let changed = false;
+        arr.elements?.forEach((el) => {
+          if (
+            this.updateClassExpression(
+              el as namedTypes.Node,
+              textColor,
+              backgroundColor,
+              hoverBackgroundColor
+            )
+          ) {
+            changed = true;
+          }
+        });
+        return changed;
+      }
+      case "ObjectExpression": {
+        const obj = expr as namedTypes.ObjectExpression;
+        let changed = false;
+        obj.properties?.forEach((prop) => {
+          if (prop && prop.type === "Property") {
+            const property = prop as namedTypes.Property;
+            if (
+              this.updateClassExpression(
+                property.value as namedTypes.Node,
+                textColor,
+                backgroundColor,
+                hoverBackgroundColor
+              )
+            ) {
+              changed = true;
+            }
+          }
+        });
+        return changed;
+      }
+      case "CallExpression": {
+        const call = expr as namedTypes.CallExpression;
+        let changed = false;
+        call.arguments = call.arguments.map((arg) => {
+          if (
+            arg &&
+            (arg.type === "Literal" || arg.type === "StringLiteral")
+          ) {
+            if (
+              this.updateClassExpression(
+                arg as namedTypes.Node,
+                textColor,
+                backgroundColor,
+                hoverBackgroundColor
+              )
+            ) {
+              changed = true;
+            }
+            return arg;
+          }
+
+          if (arg && arg.type === "ConditionalExpression") {
+            if (
+              this.updateClassExpression(
+                arg as namedTypes.Node,
+                textColor,
+                backgroundColor,
+                hoverBackgroundColor
+              )
+            ) {
+              changed = true;
+            }
+            return arg;
+          }
+
+          if (arg && arg.type === "ArrayExpression") {
+            if (
+              this.updateClassExpression(
+                arg as namedTypes.Node,
+                textColor,
+                backgroundColor,
+                hoverBackgroundColor
+              )
+            ) {
+              changed = true;
+            }
+            return arg;
+          }
+
+          if (arg && arg.type === "ObjectExpression") {
+            if (
+              this.updateClassExpression(
+                arg as namedTypes.Node,
+                textColor,
+                backgroundColor,
+                hoverBackgroundColor
+              )
+            ) {
+              changed = true;
+            }
+            return arg;
+          }
+
+          return arg;
+        });
+        return changed;
+      }
+      default:
+        return false;
+    }
+  }
+
   private classValueContainsTargets(
     classValue: string,
     textColor?: { old: string; new: string },
@@ -363,48 +535,57 @@ export class ColorUpdateService extends BaseUpdateService {
           warningResult = riskWarning;
           found = true;
         } else if (classAttr && classAttr.value) {
-          const { classValue } = this.updateClassValue(
-            ((): string => {
-              const val = classAttr.value;
-              if (!val) {
-                return "";
-              }
-              if (val.type === "StringLiteral" || val.type === "Literal") {
-                const literalVal = val as namedTypes.Literal;
-                return typeof literalVal.value === "string"
-                  ? (literalVal.value as string) || ""
-                  : "";
-              }
-              if (val.type === "JSXExpressionContainer") {
-                const expr = (val as JSXExpressionContainer)
-                  .expression as namedTypes.Node | null;
-                if (expr && expr.type === "Literal") {
-                  const literalExpr = expr as namedTypes.Literal;
-                  return typeof literalExpr.value === "string"
-                    ? (literalExpr.value as string)
-                    : "";
-                }
-              }
-              return "";
-            })(),
-            textColor,
-            backgroundColor,
-            hoverBackgroundColor
-          );
+          const val = classAttr.value;
 
-          if (
-            classAttr.value.type === "StringLiteral" ||
-            classAttr.value.type === "Literal"
-          ) {
-            (classAttr.value as namedTypes.Literal).value = classValue;
-          } else if (classAttr.value.type === "JSXExpressionContainer") {
-            const expr = (classAttr.value as JSXExpressionContainer)
-              .expression as namedTypes.Node;
+          if (val.type === "StringLiteral" || val.type === "Literal") {
+            const literalVal = val as namedTypes.Literal;
+            const { classValue, changed } = this.updateClassValue(
+              typeof literalVal.value === "string" ? literalVal.value : "",
+              textColor,
+              backgroundColor,
+              hoverBackgroundColor
+            );
+            if (changed) {
+              literalVal.value = classValue;
+            }
+            found = true;
+          } else if (val.type === "JSXExpressionContainer") {
+            const expr = (val as JSXExpressionContainer)
+              .expression as namedTypes.Node | null;
+
             if (expr && expr.type === "Literal") {
-              (expr as namedTypes.Literal).value = classValue;
+              const literalExpr = expr as namedTypes.Literal;
+              const { classValue, changed } = this.updateClassValue(
+                typeof literalExpr.value === "string"
+                  ? (literalExpr.value as string)
+                  : "",
+                textColor,
+                backgroundColor,
+                hoverBackgroundColor
+              );
+              if (changed) {
+                literalExpr.value = classValue;
+              }
+              found = true;
+            } else {
+              const changed = this.updateClassExpression(
+                expr,
+                textColor,
+                backgroundColor,
+                hoverBackgroundColor
+              );
+              if (changed) {
+                found = true;
+              } else {
+                warningResult = {
+                  success: false,
+                  error:
+                    "Cannot update colors: className expression did not expose static class tokens to replace.",
+                };
+                found = true;
+              }
             }
           }
-          found = true;
         } else if (!classAttr) {
           warningResult = {
             success: false,

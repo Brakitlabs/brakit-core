@@ -64,12 +64,13 @@ async function resolveBaseDirectories(
   projectRoot: string,
   info: FrameworkInfo
 ): Promise<string[]> {
-  const candidates =
-    info.pageRoots.length > 0
-      ? info.pageRoots
-      : info.framework === "next"
-        ? ["app", path.join("src", "app"), "pages", path.join("src", "pages")]
-        : ["src/pages", "src/routes", "pages"];
+  // Use the same logic as PathResolver to determine where 'app' or 'pages' live
+  const candidates = [
+    "app", 
+    "src/app", 
+    "pages", 
+    "src/pages"
+  ];
 
   const resolved: string[] = [];
   for (const relativePath of candidates) {

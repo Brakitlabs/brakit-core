@@ -19,119 +19,31 @@ const PAGE_EXTENSIONS = [".tsx", ".ts", ".jsx", ".js"] as const;
  * @param projectRoot - The root directory of the project
  * @returns Absolute path to the resolved file
  */
+import { PathResolver } from "./pathResolver";
+
+/**
+ * Resolve a file path (URL path, component path, or file path) to an absolute file system path.
+ * Handles Next.js App Router and Pages Router conventions.
+ *
+ * @param sourceFile - The source file path (can be URL like "/products", component like "Button.tsx", or file path)
+ * @param projectRoot - The root directory of the project
+ * @returns Absolute path to the resolved file
+ */
 export function resolveFilePath(
   sourceFile: string,
   projectRoot: string
 ): string {
-  // Handle root path
-  if (sourceFile === "/" || sourceFile === "" || !sourceFile) {
-    return resolveRootPageFile(projectRoot);
+  // Use the robust PathResolver
+  const resolved = PathResolver.resolveFilePath(projectRoot, sourceFile);
+  
+  if (resolved) {
+    return resolved;
   }
 
-  const normalizedInput = sourceFile.replace(/\\/g, "/");
-
-  // If the file has an extension, treat it as a direct file reference
-  const extensionMatch = normalizedInput.match(/\.(tsx|ts|jsx|js)$/);
-  if (extensionMatch) {
-    return resolveFileWithExtension(normalizedInput, projectRoot);
-  }
-
-  // Otherwise, treat as URL path and try Next.js patterns
-  return resolveUrlPath(normalizedInput, projectRoot);
-}
-
-/**
- * Resolve root page file (/ or empty path).
- * Tries both app/page.tsx and src/app/page.tsx.
- */
-function resolveRootPageFile(projectRoot: string): string {
-  const candidates = [
-    path.join(projectRoot, "app/page.tsx"),
-    path.join(projectRoot, "src/app/page.tsx"),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  // Default fallback
-  return path.join(projectRoot, "src/app/page.tsx");
-}
-
-/**
- * Resolve a file that already has an extension.
- * Handles both absolute and relative paths.
- */
-function resolveFileWithExtension(
-  normalizedPath: string,
-  projectRoot: string
-): string {
-  const candidates = new Set<string>();
-
-  // If absolute, try it directly
-  if (path.isAbsolute(normalizedPath)) {
-    candidates.add(normalizedPath);
-  } else {
-    // Try various common locations
-    candidates.add(normalizedPath);
-    candidates.add(`src/${normalizedPath}`);
-    candidates.add(`app/${normalizedPath}`);
-    candidates.add(`src/app/${normalizedPath}`);
-  }
-
-  // Check each candidate
-  for (const candidate of candidates) {
-    const absolutePath = path.isAbsolute(candidate)
-      ? candidate
-      : path.join(projectRoot, candidate);
-
-    if (fs.existsSync(absolutePath)) {
-      return absolutePath;
-    }
-  }
-
-  // Default fallback: assume it's relative to project root
-  return path.isAbsolute(normalizedPath)
-    ? normalizedPath
-    : path.join(projectRoot, normalizedPath);
-}
-
-/**
- * Resolve a URL path (like "/products" or "products") to a file.
- * Tries Next.js App Router and Pages Router conventions.
- */
-function resolveUrlPath(normalizedPath: string, projectRoot: string): string {
-  // Remove leading slash if present
-  const cleanPath = normalizedPath.startsWith("/")
-    ? normalizedPath.substring(1)
-    : normalizedPath;
-
-  const patterns = [
-    // App Router patterns (prioritized)
-    `src/app/${cleanPath}/page.tsx`,
-    `app/${cleanPath}/page.tsx`,
-    `src/app/${cleanPath}.tsx`,
-    `app/${cleanPath}.tsx`,
-    // Pages Router patterns
-    `src/pages/${cleanPath}.tsx`,
-    `pages/${cleanPath}.tsx`,
-    // Direct file paths
-    `src/${cleanPath}.tsx`,
-    `${cleanPath}.tsx`,
-    `${cleanPath}`,
-  ];
-
-  for (const pattern of patterns) {
-    const fullPath = path.join(projectRoot, pattern);
-    if (fs.existsSync(fullPath)) {
-      return fullPath;
-    }
-  }
-
-  // Default fallback: assume App Router
-  return path.join(projectRoot, `src/app/${cleanPath}/page.tsx`);
+  // Fallback for legacy behavior: assume it's relative to project root if not found
+  // This maintains backward compatibility for cases where PathResolver might be too strict
+  // or for files that don't exist yet but are being created.
+  return path.join(projectRoot, sourceFile);
 }
 
 /**

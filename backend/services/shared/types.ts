@@ -54,3 +54,31 @@ export const SEARCH_DIRECTORIES = [
   "layouts",
   "widgets",
 ];
+
+import type { Collection, JSXElement, JSXFragment, JSXText, JSXExpressionContainer, JSXSpreadChild, Literal } from "jscodeshift";
+import type { namedTypes } from "ast-types";
+
+export type ParsedAst = Collection<JSXElement>;
+
+export type JSXChildNode =
+  | JSXElement
+  | JSXFragment
+  | JSXText
+  | JSXExpressionContainer
+  | JSXSpreadChild
+  | Literal
+  | namedTypes.Node
+  | null
+  | undefined;
+
+export interface ComponentUsageMatch {
+  componentName: string;
+  hasInlineClassName: boolean;
+  propNames: string[];
+}
+
+export interface ProjectComponentUsageMatch extends ComponentUsageMatch {
+  filePath: string;
+}
+
+

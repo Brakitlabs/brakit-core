@@ -37,6 +37,17 @@ export function getReactSourceInfo(element: HTMLElement): ReactSourceInfo {
     return cached;
   }
 
+  // Priority 1: Check for explicit data attributes (Future-proofing for build-time instrumentation)
+  if (element.dataset.bkFile) {
+    const sourceInfo: ReactSourceInfo = {
+      fileName: element.dataset.bkFile,
+      lineNumber: element.dataset.bkLine ? parseInt(element.dataset.bkLine, 10) : undefined,
+      componentName: element.dataset.bkComponent,
+    };
+    reactSourceCache.set(element, sourceInfo);
+    return sourceInfo;
+  }
+
   const sourceInfo: ReactSourceInfo = {};
   const maxTraverse = 20;
   const maxDomTraverse = 10;

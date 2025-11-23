@@ -113,15 +113,43 @@ export interface ProjectComponentUsageMatch extends ComponentUsageMatch {
   filePath: string;
 }
 
+import { ComponentResolver } from "../core/ComponentResolver";
+import { ASTQueryEngine } from "../core/ASTQueryEngine";
+import { ASTMutationEngine } from "../core/ASTMutationEngine";
+import { ElementLocator } from "../core/ElementLocator";
+import { TextMatcherService } from "../core/TextMatcherService";
+import {
+  extractDynamicClasses,
+  sanitizeClassTokens,
+  hasClassOverlap,
+} from "./elementMatcher";
+
+/**
+ * Base service for AST-based updates to React/JSX files.
+ * Provides core functionality for locating, analyzing, and modifying JSX elements.
+ *
+ * Architecture:
+ * - ComponentResolver: Locates component files
+ * - ASTQueryEngine: Reads and traverses ASTs
+ * - ASTMutationEngine: Modifies and writes ASTs
+ * - ElementLocator: Finds elements by various criteria
+ * - TextMatcherService: Extracts and matches text content
+ */
 export abstract class BaseUpdateService {
   protected projectRoot: string;
-  private componentResolutionCache = new Map<
-    string,
-    { mtimeMs: number; path: string | null }
-  >();
+  protected componentResolver: ComponentResolver;
+  protected astQueryEngine: ASTQueryEngine;
+  protected astMutationEngine: ASTMutationEngine;
+  protected elementLocator: ElementLocator;
+  protected textMatcher: TextMatcherService;
 
   constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
+    this.componentResolver = new ComponentResolver(projectRoot);
+    this.astQueryEngine = new ASTQueryEngine(projectRoot);
+    this.astMutationEngine = new ASTMutationEngine();
+    this.elementLocator = new ElementLocator();
+    this.textMatcher = new TextMatcherService();
   }
 
   /**
@@ -303,6 +331,11 @@ export abstract class BaseUpdateService {
     };
   }
 
+  // ========== COMPONENT RESOLUTION ==========
+
+  /**
+   * Resolve where a component is being used (locally or in external file)
+   */
   protected resolveComponentUsage(
     text: string,
     ast: ParsedAst,
@@ -739,51 +772,15 @@ export abstract class BaseUpdateService {
     possibleTags: string[],
     options?: { allowDynamicFallback?: boolean }
   ): Promise<boolean> {
-    const allowDynamicFallback = options?.allowDynamicFallback !== false;
-    try {
-      const source = fs.readFileSync(filePath, "utf8");
-      const j = jscodeshift.withParser("tsx") as typeof jscodeshift;
-      const ast = j(source) as ParsedAst;
-
-      let found = false;
-      const normalizedTarget = this.normalizeText(text);
-
-      ast.findJSXElements().forEach((path: ASTPath<JSXElement>) => {
-        if (found) return;
-
-        const { node } = path;
-        const nodeName =
-          resolveJSXElementName(node.openingElement?.name);
-
-        if (nodeName && possibleTags.includes(nodeName)) {
-          const children: JSXChildNode[] =
-            ((node.children as unknown as JSXChildNode[]) || []) as JSXChildNode[];
-          let hasStaticText = false;
-          const textInfo = this.collectNodeTextInfo(children);
-          const normalizedCombinedText = this.normalizeText(textInfo.text);
-          const hasDynamicContent = textInfo.hasDynamicContent;
-
-          if (
-            normalizedTarget.length > 0 &&
-            normalizedCombinedText === normalizedTarget
-          ) {
-            found = true;
-            hasStaticText = true;
-          }
-
-          // If allowed, accept dynamic content as fallback, but only when no static match is found
-          if (!hasStaticText && hasDynamicContent && allowDynamicFallback) {
-            found = true;
-          }
-        }
-      });
-
-      return found;
-    } catch (error) {
-      // Ignore parse errors in files
-      return false;
-    }
+    return this.astQueryEngine.fileContainsText(
+      filePath,
+      text,
+      possibleTags,
+      options
+    );
   }
+
+  // ========== AST PARSING & QUERIES ==========
 
   /**
    * Parse AST and find matching JSX elements
@@ -792,9 +789,12 @@ export abstract class BaseUpdateService {
     source: string,
     tag: string
   ): { ast: ParsedAst; possibleNames: string[] } {
-    const j = jscodeshift.withParser("tsx") as typeof jscodeshift;
-    const ast = j(source) as ParsedAst;
     const possibleNames = this.getPossibleTagNames(tag);
+    const { ast } = this.astQueryEngine.parseAndFindElements(
+      source,
+      tag,
+      possibleNames
+    );
     return { ast, possibleNames };
   }
 
@@ -824,6 +824,15 @@ export abstract class BaseUpdateService {
         normalizedCombinedText === normalizedTarget
       ) {
         textMatched = true;
+      } else if (
+        normalizedTarget.length > 0 &&
+        hasDynamicContent &&
+        normalizedCombinedText.length > 0 &&
+        (normalizedTarget.startsWith(normalizedCombinedText) ||
+          normalizedCombinedText.startsWith(normalizedTarget))
+      ) {
+        // Allow prefix/suffix match when content is partially dynamic (e.g., "Box 2" vs "Box __DYNAMIC__")
+        textMatched = true;
       }
 
       // If no text match, try matching by className when we have enough context
@@ -836,26 +845,21 @@ export abstract class BaseUpdateService {
           (attr): attr is JSXAttribute =>
             attr?.type === "JSXAttribute" && attr.name?.name === "className"
         );
-        if (classAttr && classAttr.value) {
-          const classValue =
-            this.extractStringValue(classAttr.value as any) || "";
-          if (classValue) {
-            const nodeClassTokens = this.sanitizeClassTokens(classValue);
-
-            // Try additional class match first (e.g., oldSize for font updates)
-            if (
-              additionalClassTokens.size > 0 &&
-              this.hasClassOverlap(additionalClassTokens, nodeClassTokens)
-            ) {
-              textMatched = true;
-            }
-            // Otherwise try matching by target className
-            else if (
-              targetClassTokens.size > 0 &&
-              this.hasClassOverlap(targetClassTokens, nodeClassTokens)
-            ) {
-              textMatched = true;
-            }
+        const nodeClassTokens = this.extractClassTokensFromAttribute(classAttr);
+        if (nodeClassTokens.size > 0) {
+          // Try additional class match first (e.g., oldSize for font updates)
+          if (
+            additionalClassTokens.size > 0 &&
+            this.hasClassOverlap(additionalClassTokens, nodeClassTokens)
+          ) {
+            textMatched = true;
+          }
+          // Otherwise try matching by target className
+          else if (
+            targetClassTokens.size > 0 &&
+            this.hasClassOverlap(targetClassTokens, nodeClassTokens)
+          ) {
+            textMatched = true;
           }
         }
       }
@@ -864,6 +868,9 @@ export abstract class BaseUpdateService {
     };
   }
 
+  /**
+   * Extract a static string value from an AST node
+   */
   protected extractStringValue(
     node:
       | Literal
@@ -874,331 +881,26 @@ export abstract class BaseUpdateService {
       | null
       | undefined
   ): string | null {
-    if (!node) {
-      return null;
-    }
-
-    switch (node.type) {
-      case "StringLiteral":
-      case "Literal": {
-        const literal = node as Literal;
-        return typeof literal.value === "string" ? literal.value : null;
-      }
-      case "TemplateLiteral":
-        if (
-          (node as TemplateLiteral).expressions &&
-          (node as TemplateLiteral).expressions.length > 0
-        ) {
-          return null;
-        }
-        return (
-          (node as TemplateLiteral).quasis
-            ?.map(
-              (q: TemplateLiteral["quasis"][number]) => q.value.cooked ?? ""
-            )
-            .join("") ?? null
-        );
-      case "JSXExpressionContainer": {
-        const jsxExpr = node as JSXExpressionContainer;
-        return this.extractStringValue(jsxExpr.expression as any);
-      }
-      case "JSXText": {
-        const jsxText = node as JSXText;
-        return typeof jsxText.value === "string" ? jsxText.value : null;
-      }
-      default:
-        return null;
-    }
+    return this.textMatcher.extractStringValue(node as any);
   }
+
+  // ========== COMPONENT USAGE QUERIES ==========
 
   protected findComponentUsageByText(
     ast: ParsedAst,
     text: string
   ): ComponentUsageMatch | null {
-    const normalizedTarget = this.normalizeText(text);
-
-    if (!normalizedTarget) {
-      return null;
-    }
-
-    let match: ComponentUsageMatch | null = null;
-
-    ast.find(jscodeshift.JSXElement).forEach((path: ASTPath<JSXElement>) => {
-      if (match) {
-        return;
-      }
-
-      const node = path.node;
-      const nameNode = node.openingElement?.name;
-      const candidateName = resolveJSXElementName(nameNode);
-
-      if (!candidateName || !/^[A-Z]/.test(candidateName)) {
-        return;
-      }
-
-      const attributeSet = new Set<string>();
-      const attributes: Array<
-        JSXAttribute | JSXSpreadAttribute | null | undefined
-      > = node.openingElement?.attributes || [];
-
-      for (const attr of attributes) {
-        if (!attr || attr.type !== "JSXAttribute") {
-          continue;
-        }
-
-        const attrName =
-          typeof attr.name?.name === "string" ? attr.name.name : undefined;
-        if (attrName) {
-          attributeSet.add(attrName);
-        }
-
-        const literalValue = this.extractStringValue(attr.value as any);
-        if (
-          literalValue &&
-          this.normalizeText(literalValue) === normalizedTarget
-        ) {
-          match = {
-            componentName: candidateName,
-            hasInlineClassName: attributeSet.has("className"),
-            propNames: Array.from(attributeSet),
-          };
-          return;
-        }
-      }
-
-      const children: JSXChildNode[] =
-        ((node.children as unknown as JSXChildNode[]) || []) as JSXChildNode[];
-      for (const child of children) {
-        const literalValue = this.extractStringValue(child);
-        if (
-          literalValue &&
-          this.normalizeText(literalValue) === normalizedTarget
-        ) {
-          match = {
-            componentName: candidateName,
-            hasInlineClassName: attributeSet.has("className"),
-            propNames: Array.from(attributeSet),
-          };
-          return;
-        }
-      }
-    });
-
-    return match;
+    return this.astQueryEngine.findComponentUsageByText(ast, text);
   }
 
   protected findComponentUsageInProject(
     text: string
   ): ProjectComponentUsageMatch | null {
-    const normalizedTarget = this.normalizeText(text);
-
-    if (!normalizedTarget) {
-      return null;
-    }
-
-    const searchDirs = SEARCH_DIRECTORIES.map((dir) =>
-      path.join(this.projectRoot, dir)
-    ).filter((dir) => fs.existsSync(dir));
-
-    if (searchDirs.length === 0) {
-      searchDirs.push(this.projectRoot);
-    }
-
-    for (const dir of searchDirs) {
-      const match = this.searchDirectoryForComponentUsage(dir, text);
-      if (match) {
-        return match;
-      }
-    }
-
-    return null;
+    return this.astQueryEngine.findComponentUsageInProject(text);
   }
 
   protected findComponentFileByName(componentName: string): string | null {
-    if (!componentName) {
-      return null;
-    }
-
-    const searchDirs = SEARCH_DIRECTORIES.map((dir) =>
-      path.join(this.projectRoot, dir)
-    ).filter((dir) => fs.existsSync(dir));
-
-    if (searchDirs.length === 0) {
-      searchDirs.push(this.projectRoot);
-    }
-
-    for (const dir of searchDirs) {
-      const match = this.searchDirectoryForComponentFile(dir, componentName);
-      if (match) {
-        return match;
-      }
-    }
-
-    return null;
-  }
-
-  private searchDirectoryForComponentFile(
-    dir: string,
-    componentName: string
-  ): string | null {
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.name.startsWith(".")) {
-          continue;
-        }
-
-        const fullPath = path.join(dir, entry.name);
-
-        if (entry.isDirectory()) {
-          if (SKIP_DIRECTORIES.includes(entry.name)) {
-            continue;
-          }
-
-          const indexMatch = this.matchComponentIndexFile(
-            fullPath,
-            componentName
-          );
-          if (indexMatch) {
-            return indexMatch;
-          }
-
-          const nested = this.searchDirectoryForComponentFile(
-            fullPath,
-            componentName
-          );
-          if (nested) {
-            return nested;
-          }
-        } else if (entry.isFile()) {
-          if (
-            COMPONENT_FILE_EXTENSIONS.some((ext) => entry.name.endsWith(ext)) &&
-            this.matchesComponentBaseName(entry.name, componentName)
-          ) {
-            return fullPath;
-          }
-        }
-      }
-    } catch (error) {
-      logger.warn({
-        message: `[BaseUpdate] Failed component search`,
-        context: {
-          componentName,
-          dir,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
-
-    return null;
-  }
-
-  private matchComponentIndexFile(
-    dirPath: string,
-    componentName: string
-  ): string | null {
-    try {
-      const stats = fs.statSync(dirPath);
-      if (!stats.isDirectory()) {
-        return null;
-      }
-
-      if (
-        !this.matchesComponentBaseName(path.basename(dirPath), componentName)
-      ) {
-        return null;
-      }
-
-      for (const ext of COMPONENT_FILE_EXTENSIONS) {
-        const candidate = path.join(dirPath, `index${ext}`);
-        if (fs.existsSync(candidate)) {
-          const candidateStats = fs.statSync(candidate);
-          if (candidateStats.isFile()) {
-            return candidate;
-          }
-        }
-      }
-    } catch (error) {
-      return null;
-    }
-
-    return null;
-  }
-
-  private matchesComponentBaseName(
-    fileName: string,
-    componentName: string
-  ): boolean {
-    if (!fileName || !componentName) {
-      return false;
-    }
-
-    const baseName = fileName.replace(/\.[^.]+$/, "");
-    return baseName === componentName;
-  }
-
-  private searchDirectoryForComponentUsage(
-    dir: string,
-    text: string
-  ): ProjectComponentUsageMatch | null {
-    const normalizedTarget = this.normalizeText(text);
-
-    if (!normalizedTarget) {
-      return null;
-    }
-
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-
-        if (SKIP_DIRECTORIES.includes(entry.name)) {
-          continue;
-        }
-
-        if (entry.isDirectory()) {
-          const match = this.searchDirectoryForComponentUsage(fullPath, text);
-          if (match) {
-            return match;
-          }
-        } else if (entry.isFile() && /\.(tsx|jsx)$/.test(entry.name)) {
-          const source = fs.readFileSync(fullPath, "utf8");
-
-          if (!source.includes(text)) {
-            continue;
-          }
-
-          try {
-            const j = jscodeshift.withParser("tsx") as typeof jscodeshift;
-            const ast = j(source) as ParsedAst;
-            const usageMatch = this.findComponentUsageByText(ast, text);
-
-            if (usageMatch) {
-              return { filePath: fullPath, ...usageMatch };
-            }
-          } catch (error) {
-            logger.warn({
-              message: `[SmartEdit] Failed to parse component file during usage search`,
-              context: {
-                filePath: fullPath,
-                error: error instanceof Error ? error.message : String(error),
-              },
-            });
-          }
-        }
-      }
-    } catch (error) {
-      logger.warn({
-        message: `[SmartEdit] Error scanning directory for component usage`,
-        context: {
-          directory: dir,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
-
-    return null;
+    return this.componentResolver.findComponentFileByName(componentName);
   }
 
   protected checkSmartEditRisk(options: {
@@ -1445,165 +1147,10 @@ export abstract class BaseUpdateService {
     sourceFilePath: string,
     componentName: string
   ): string | null {
-    if (!componentName) {
-      return null;
-    }
-
-    const cacheKey = `${sourceFilePath}:${componentName}`;
-    let stats: fs.Stats | null = null;
-
-    try {
-      stats = fs.statSync(sourceFilePath);
-      const cached = this.componentResolutionCache.get(cacheKey);
-      if (cached && cached.mtimeMs === stats.mtimeMs) {
-        return cached.path;
-      }
-    } catch (error) {
-      this.componentResolutionCache.delete(cacheKey);
-      return null;
-    }
-
-    let resolvedPath: string | null = null;
-
-    try {
-      const source = fs.readFileSync(sourceFilePath, "utf8");
-      const j = jscodeshift.withParser("tsx") as typeof jscodeshift;
-      const ast = j(source);
-
-      let importTarget: string | null = null;
-
-      ast.find(jscodeshift.ImportDeclaration).forEach((path) => {
-        if (importTarget) {
-          return;
-        }
-
-        const declaration = path.node;
-        const specifiers: Array<
-          | ImportSpecifier
-          | ImportDefaultSpecifier
-          | ImportNamespaceSpecifier
-          | null
-          | undefined
-        > = declaration.specifiers || [];
-        const matches = specifiers.some((specifier) => {
-          if (!specifier || !specifier.local?.name) {
-            return false;
-          }
-          return specifier.local.name === componentName;
-        });
-
-        if (matches) {
-          const moduleSource = declaration.source.value;
-          if (typeof moduleSource === "string") {
-            importTarget = moduleSource;
-          }
-        }
-      });
-
-      if (importTarget) {
-        resolvedPath = this.resolveModuleToFile(
-          importTarget,
-          path.dirname(sourceFilePath)
-        );
-      }
-    } catch (error) {
-      logger.warn({
-        message: `[SmartEdit] Failed to resolve component from file`,
-        context: {
-          componentName,
-          sourceFilePath,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
-
-    if (stats) {
-      this.componentResolutionCache.set(cacheKey, {
-        mtimeMs: stats.mtimeMs,
-        path: resolvedPath,
-      });
-    }
-
-    return resolvedPath;
-  }
-
-  private resolveModuleToFile(
-    moduleSpecifier: string,
-    fromDir: string
-  ): string | null {
-    const normalized = moduleSpecifier.replace(/\\/g, "/");
-    const candidates: string[] = [];
-
-    const pushCandidate = (candidate: string | null | undefined) => {
-      if (!candidate) {
-        return;
-      }
-      if (!candidates.includes(candidate)) {
-        candidates.push(candidate);
-      }
-    };
-
-    const addWithExtensions = (base: string) => {
-      const hasKnownExtension = COMPONENT_FILE_EXTENSIONS.some((ext) =>
-        base.endsWith(ext)
-      );
-
-      pushCandidate(base);
-
-      if (!hasKnownExtension) {
-        for (const ext of COMPONENT_FILE_EXTENSIONS) {
-          pushCandidate(`${base}${ext}`);
-        }
-      }
-
-      for (const ext of COMPONENT_FILE_EXTENSIONS) {
-        pushCandidate(path.join(base, `index${ext}`));
-      }
-    };
-
-    if (normalized.startsWith(".")) {
-      addWithExtensions(path.resolve(fromDir, normalized));
-    } else if (normalized.startsWith("@/")) {
-      const trimmed = normalized.slice(2);
-      addWithExtensions(path.join(this.projectRoot, trimmed));
-      addWithExtensions(path.join(this.projectRoot, "src", trimmed));
-      addWithExtensions(path.join(this.projectRoot, "app", trimmed));
-    } else if (normalized.startsWith("~/")) {
-      const trimmed = normalized.slice(2);
-      addWithExtensions(path.join(this.projectRoot, trimmed));
-      addWithExtensions(path.join(this.projectRoot, "src", trimmed));
-    } else if (normalized.startsWith("/")) {
-      addWithExtensions(path.join(this.projectRoot, normalized));
-      addWithExtensions(path.join(this.projectRoot, "src", normalized));
-    } else {
-      addWithExtensions(path.join(this.projectRoot, normalized));
-      addWithExtensions(path.join(this.projectRoot, "src", normalized));
-      addWithExtensions(path.join(this.projectRoot, "app", normalized));
-      addWithExtensions(path.join(this.projectRoot, "components", normalized));
-    }
-
-    for (const candidate of candidates) {
-      try {
-        if (!fs.existsSync(candidate)) {
-          continue;
-        }
-
-        const stats = fs.statSync(candidate);
-        if (stats.isFile()) {
-          return candidate;
-        }
-      } catch (error) {
-        logger.warn({
-          message: `[SmartEdit] Failed to stat component candidate`,
-          context: {
-            candidate,
-            error: error instanceof Error ? error.message : String(error),
-          },
-        });
-      }
-    }
-
-    return null;
+    return this.componentResolver.resolveComponentFilePath(
+      sourceFilePath,
+      componentName
+    );
   }
 
   private extractComponentNameFromTag(tag?: string): string {
@@ -1618,41 +1165,23 @@ export abstract class BaseUpdateService {
     return tag.charAt(0).toUpperCase() + tag.slice(1);
   }
 
+  // ========== ELEMENT MATCHING & SELECTION ==========
+
+  /**
+   * Select the best matching element from candidates using sophisticated scoring
+   */
   protected selectBestMatchingElement(
     candidates: ElementMatchCandidate[],
     className: string,
     text: string,
     serviceName: string
   ): { matchedNode: JSXElement; matchedPath: ASTPath<JSXElement> } | null {
-    if (candidates.length === 0) {
-      return null;
-    }
-
-    logger.info({
-      message: `[${serviceName}] Found ${candidates.length} candidate(s)`,
-      context: {
-        count: candidates.length,
-        className,
-      },
-    });
-
-    const bestMatch = findBestMatch(candidates, className, text);
-    if (!bestMatch) {
-      return null;
-    }
-
-    logger.info({
-      message: `[${serviceName}] Selected best match`,
-      context: {
-        score: bestMatch.score,
-        reason: bestMatch.reason,
-      },
-    });
-
-    return {
-      matchedNode: bestMatch.node as JSXElement,
-      matchedPath: bestMatch.path as ASTPath<JSXElement>,
-    };
+    return this.elementLocator.selectBestMatchingElement(
+      candidates,
+      className,
+      text,
+      serviceName
+    );
   }
 
   /**
@@ -1669,99 +1198,23 @@ export abstract class BaseUpdateService {
     possibleNames: string[],
     textMatcher: (node: JSXElement, children: JSXChildNode[]) => boolean
   ): ElementMatchCandidate[] {
-    const candidates: ElementMatchCandidate[] = [];
-
-    ast.findJSXElements().forEach((path: ASTPath<JSXElement>) => {
-      const { node } = path;
-      const nodeName = resolveJSXElementName(node.openingElement?.name);
-
-      if (nodeName && possibleNames.includes(nodeName)) {
-        const children: JSXChildNode[] =
-          ((node.children as unknown as JSXChildNode[]) || []) as JSXChildNode[];
-
-        if (textMatcher(node, children)) {
-          candidates.push(createCandidate(node, path));
-        }
-      }
-    });
-
-    return candidates;
+    return this.astQueryEngine.collectCandidateElements(
+      ast,
+      possibleNames,
+      textMatcher
+    );
   }
 
+  // ========== AST MUTATION & FILE I/O ==========
+
+  /**
+   * Remove a matched element from the AST
+   */
   protected removeNodeFromAst(target: ElementMatchContext): boolean {
-    const matchedPath = target.matchedPath;
-    if (typeof matchedPath?.prune === "function") {
-      const parentPath = matchedPath.parent as ASTPath<namedTypes.Node> | null;
-      matchedPath.prune();
-      this.pruneEmptyAncestors(parentPath);
-      return true;
-    }
-
-    if (matchedPath?.parent) {
-      const parent = matchedPath.parent as ASTPath<namedTypes.Node>;
-      const parentValue = parent.value as unknown as {
-        children?: JSXChildNode[];
-      };
-      const parentChildren = parentValue.children || [];
-      parentValue.children = parentChildren.filter(
-        (child) => child !== target.matchedNode
-      );
-      this.pruneEmptyAncestors(parent);
-      return true;
-    }
-
-    return false;
-  }
-
-  private pruneEmptyAncestors(
-    path: ASTPath<namedTypes.Node> | null | undefined
-  ): void {
-    let current = path;
-
-    while (current && current.value) {
-      const node = current.value;
-
-      if (node.type !== "JSXElement" && node.type !== "JSXFragment") {
-        break;
-      }
-
-      const children: JSXChildNode[] =
-        (node as unknown as { children?: JSXChildNode[] }).children || [];
-      const hasMeaningfulChild = children.some((child) => {
-        if (!child) {
-          return false;
-        }
-        if (child.type === "JSXText") {
-          const value = (child as JSXText).value;
-          return typeof value === "string" && value.trim().length > 0;
-        }
-        return true;
-      });
-
-      if (hasMeaningfulChild) {
-        break;
-      }
-
-      if (typeof current.prune === "function") {
-        const parent = current.parent as
-          | ASTPath<namedTypes.Node>
-          | null
-          | undefined;
-        current.prune();
-        current = parent;
-        continue;
-      }
-
-      if (current.parent?.value?.children) {
-        current.parent.value.children = current.parent.value.children.filter(
-          (child: JSXChildNode) => child !== (node as unknown as JSXChildNode)
-        );
-        current = current.parent;
-        continue;
-      }
-
-      break;
-    }
+    return this.astMutationEngine.removeNodeFromAst(
+      target.matchedPath,
+      target.matchedPath.parent
+    );
   }
 
   protected async writeFormattedSource(
@@ -1769,118 +1222,93 @@ export abstract class BaseUpdateService {
     ast: { toSource(): string },
     originalSource: string
   ): Promise<boolean> {
-    const newSource = ast.toSource();
-    const formattedContent = await prettier.format(newSource, {
-      parser: "typescript",
-    });
-
-    if (formattedContent === originalSource) {
-      return false;
-    }
-
-    await fs.promises.writeFile(filePath, formattedContent, "utf8");
-    actionHistory.recordFileChange(filePath, originalSource, formattedContent, {
-      existedBefore: originalSource !== null,
-      existedAfter: true,
-    });
-    return true;
-  }
-
-  protected sanitizeClassTokens(className?: string): Set<string> {
-    if (!className) {
-      return new Set();
-    }
-
-    return new Set(
-      className
-        .split(/\s+/)
-        .map((token) => token.trim().toLowerCase())
-        .filter(
-          (token) =>
-            token &&
-            !token.startsWith("brakit-") &&
-            token !== "brakit-reorderable" &&
-            token !== "brakit-shake"
-        )
+    return this.astMutationEngine.writeFormattedSource(
+      filePath,
+      ast,
+      originalSource
     );
   }
 
+  protected sanitizeClassTokens(className?: string): Set<string> {
+    return sanitizeClassTokens(className);
+  }
+
+  protected extractClassTokensFromExpression(
+    expr: namedTypes.Node | null | undefined
+  ): Set<string> {
+    const classes = extractDynamicClasses(expr);
+    return this.sanitizeClassTokens(classes.join(" "));
+  }
+
+  protected extractClassTokensFromAttribute(
+    attr: JSXAttribute | JSXSpreadAttribute | null | undefined
+  ): Set<string> {
+    if (
+      !attr ||
+      attr.type !== "JSXAttribute" ||
+      attr.name?.name !== "className"
+    ) {
+      return new Set();
+    }
+
+    const value = (attr as JSXAttribute).value as
+      | Literal
+      | TemplateLiteral
+      | JSXExpressionContainer
+      | null
+      | undefined;
+
+    if (!value) {
+      return new Set();
+    }
+
+    if (value.type === "Literal") {
+      return this.sanitizeClassTokens(
+        typeof (value as Literal).value === "string"
+          ? ((value as Literal).value as string)
+          : ""
+      );
+    }
+
+    if ((value as any).type === "StringLiteral") {
+      const stringVal = (value as any).value;
+      return this.sanitizeClassTokens(
+        typeof stringVal === "string" ? (stringVal as string) : ""
+      );
+    }
+
+    if (value.type === "JSXExpressionContainer") {
+      return this.extractClassTokensFromExpression(
+        (value as JSXExpressionContainer).expression as namedTypes.Node
+      );
+    }
+
+    return new Set();
+  }
+
+  /**
+   * Collect text content info from JSX children
+   */
   protected collectNodeTextInfo(children: JSXChildNode[]): {
     text: string;
     hasDynamicContent: boolean;
   } {
-    const parts: string[] = [];
-    let hasDynamicContent = false;
-
-    for (const child of children) {
-      if (!child) {
-        continue;
-      }
-
-      if (child.type === "JSXText" && (child as JSXText).value) {
-        parts.push((child as JSXText).value as string);
-        continue;
-      }
-
-      if (child.type === "JSXExpressionContainer") {
-        const expression = (child as JSXExpressionContainer).expression;
-        if (!expression || expression.type === "JSXEmptyExpression") {
-          continue;
-        }
-
-        const value = this.extractStringValue(expression);
-        if (value) {
-          parts.push(value);
-        } else {
-          hasDynamicContent = true;
-        }
-        continue;
-      }
-
-      if (child.type === "JSXElement") {
-        const nestedInfo = this.collectNodeTextInfo(
-          ((child as JSXElement).children || []) as JSXChildNode[]
-        );
-        if (nestedInfo.text) {
-          parts.push(nestedInfo.text);
-        }
-        if (nestedInfo.hasDynamicContent) {
-          hasDynamicContent = true;
-        }
-        continue;
-      }
-
-      const value = this.extractStringValue(child);
-      if (value) {
-        parts.push(value);
-      }
-    }
-
-    return {
-      text: parts.join(""),
-      hasDynamicContent,
-    };
+    return this.textMatcher.collectNodeTextInfo(children);
   }
 
+  /**
+   * Extract and normalize text from JSX children
+   */
   protected extractNodeText(children: JSXChildNode[]): string {
-    const { text } = this.collectNodeTextInfo(children);
-    return this.normalizeText(text);
+    return this.textMatcher.extractNodeText(children);
   }
+
+  // ========== CLASS UTILITIES ==========
 
   protected hasClassOverlap(
     targetTokens: Set<string>,
     nodeTokens: Set<string>
   ): boolean {
-    if (targetTokens.size === 0 || nodeTokens.size === 0) {
-      return false;
-    }
-
-    for (const token of targetTokens) {
-      if (nodeTokens.has(token)) {
-        return true;
-      }
-    }
-
-    return false;
+    return hasClassOverlap(targetTokens, nodeTokens);
   }
 }
