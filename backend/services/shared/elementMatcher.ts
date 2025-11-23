@@ -129,10 +129,15 @@ export function extractDynamicClasses(expr: any): string[] {
         // Handle { 'class-name': condition }
         node.properties.forEach((prop: any) => {
           if (!prop) return;
-          if (prop.key && (prop.key.type === "StringLiteral" || prop.key.type === "Literal")) {
-             classes.push(...(prop.key.value as string).split(/\s+/).filter(Boolean));
+          if (
+            prop.key &&
+            (prop.key.type === "StringLiteral" || prop.key.type === "Literal")
+          ) {
+            classes.push(
+              ...(prop.key.value as string).split(/\s+/).filter(Boolean)
+            );
           } else if (prop.key && prop.key.type === "Identifier") {
-             classes.push(prop.key.name);
+            classes.push(prop.key.name);
           }
         });
         break;
@@ -213,9 +218,9 @@ function extractAttributeValue(node: any): string | null {
       expression.type === "TemplateLiteral" &&
       (expression.expressions?.length ?? 0) === 0
     ) {
-      return expression.quasis
-        ?.map((q: any) => q.value.cooked)
-        .join("") ?? null;
+      return (
+        expression.quasis?.map((q: any) => q.value.cooked).join("") ?? null
+      );
     }
   }
 
@@ -343,33 +348,38 @@ export function findBestMatch(
     // 2. Text Match (0.0 or 0.1)
     // If candidate has dynamic text, we are more lenient
     const hasDynamicText = candidate.text.includes("__DYNAMIC__");
-    const cleanCandidateText = candidate.text.replace(/__DYNAMIC__/g, "").trim();
+    const cleanCandidateText = candidate.text
+      .replace(/__DYNAMIC__/g, "")
+      .trim();
     const strippedClicked = normalizedClickedText.replace(/[^a-z0-9]+/g, "");
     const strippedCandidate = normalizeText(cleanCandidateText).replace(
       /[^a-z0-9]+/g,
       ""
     );
-    
+
     let textMatch = 0;
     if (normalizedClickedText && cleanCandidateText) {
-        if (cleanCandidateText.includes(normalizedClickedText) || normalizedClickedText.includes(cleanCandidateText)) {
-            textMatch = 0.2; // Boosted text match weight
-        } else if (
-          strippedClicked &&
-          strippedCandidate &&
-          (strippedCandidate.includes(strippedClicked) ||
-            strippedClicked.includes(strippedCandidate))
-        ) {
-          // Allow matches that only differ by whitespace/punctuation (e.g., "Active users18,245" vs "Active users 18,245")
-          textMatch = 0.2;
-        }
+      if (
+        cleanCandidateText.includes(normalizedClickedText) ||
+        normalizedClickedText.includes(cleanCandidateText)
+      ) {
+        textMatch = 0.2; // Boosted text match weight
+      } else if (
+        strippedClicked &&
+        strippedCandidate &&
+        (strippedCandidate.includes(strippedClicked) ||
+          strippedClicked.includes(strippedCandidate))
+      ) {
+        // Allow matches that only differ by whitespace/punctuation (e.g., "Active users18,245" vs "Active users 18,245")
+        textMatch = 0.2;
+      }
     } else if (normalizedClickedText && hasDynamicText) {
-        // If we have text but candidate is dynamic, we can't be sure. 
-        // We don't penalize, but we don't award full points.
-        textMatch = 0.05; 
+      // If we have text but candidate is dynamic, we can't be sure.
+      // We don't penalize, but we don't award full points.
+      textMatch = 0.05;
     } else if (!normalizedClickedText && !cleanCandidateText) {
-        // Both empty
-        textMatch = 0.1;
+      // Both empty
+      textMatch = 0.1;
     }
 
     // 3. Attribute Match (0.0 or 0.3)
@@ -390,15 +400,15 @@ export function findBestMatch(
     // 4. Sibling Index Match (0.0 or 0.15)
     // We treat this as a secondary signal.
     let indexMatch = 0;
-    if (clickedIndex !== undefined && candidate.siblingIndex !== undefined) {
-        // Exact match
-        if (clickedIndex === candidate.siblingIndex) {
-            indexMatch = 0.15;
-        } 
-        // Close match (off by one due to text nodes/comments?)
-        else if (Math.abs(clickedIndex - candidate.siblingIndex) <= 1) {
-            indexMatch = 0.05;
-        }
+    if (clickedIndex !== undefined && candidate.siblingIndex >= 0) {
+      // Exact match
+      if (clickedIndex === candidate.siblingIndex) {
+        indexMatch = 0.15;
+      }
+      // Close match (off by one due to text nodes/comments?)
+      else if (Math.abs(clickedIndex - candidate.siblingIndex) <= 1) {
+        indexMatch = 0.05;
+      }
     }
 
     // Structure-First Override:
@@ -406,10 +416,15 @@ export function findBestMatch(
     // (Tag is implicitly matched by caller usually, but we have it in candidate)
     let structureBonus = 0;
     if (classSimilarity > 0.8 && indexMatch > 0.1) {
-        structureBonus = 0.2;
+      structureBonus = 0.2;
     }
 
-    const totalScore = classSimilarity + textMatch + attributeMatch + indexMatch + structureBonus;
+    const totalScore =
+      classSimilarity +
+      textMatch +
+      attributeMatch +
+      indexMatch +
+      structureBonus;
 
     logger.info({
       message: "[ElementMatcher] Candidate scored",
@@ -440,11 +455,11 @@ export function findBestMatch(
 
   // Thresholds
   if (best.score < 0.1) {
-       logger.warn({
-        message: "[ElementMatcher] No confident match (score too low)",
-        context: { bestScore: best.score },
-      });
-      return null;
+    logger.warn({
+      message: "[ElementMatcher] No confident match (score too low)",
+      context: { bestScore: best.score },
+    });
+    return null;
   }
 
   if (!secondBest) {
@@ -479,10 +494,10 @@ export function createCandidate(node: any, path: any): ElementMatchCandidate {
   // Calculate sibling index if possible
   // jscodeshift paths usually have a 'name' or 'key' property that is the index in the parent array
   let siblingIndex = -1;
-  if (typeof path.key === 'number') {
-      siblingIndex = path.key;
-  } else if (typeof path.name === 'number') {
-      siblingIndex = path.name;
+  if (typeof path.key === "number") {
+    siblingIndex = path.key;
+  } else if (typeof path.name === "number") {
+    siblingIndex = path.name;
   }
 
   return {
@@ -492,6 +507,6 @@ export function createCandidate(node: any, path: any): ElementMatchCandidate {
     text: extractText(node),
     attributes: extractStringAttributes(node),
     siblingIndex,
-    tagName: node.openingElement?.name?.name || "unknown"
+    tagName: node.openingElement?.name?.name || "unknown",
   };
 }
