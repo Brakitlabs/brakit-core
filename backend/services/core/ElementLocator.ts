@@ -5,7 +5,7 @@ import {
   createCandidate,
   type ElementMatchCandidate,
   type ElementMatchResult,
-} from "../shared/elementMatcher";
+} from "../shared/elementMatcher/index";
 import { ParsedAst, JSXChildNode } from "../shared/types";
 import { TextMatcherService } from "./TextMatcherService";
 
