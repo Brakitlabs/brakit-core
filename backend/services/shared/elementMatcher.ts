@@ -7,6 +7,8 @@ export interface ElementMatchCandidate {
   className: string;
   text: string;
   attributes: { name: string; value: string }[];
+  siblingIndex: number;
+  tagName: string;
 }
 
 export interface ElementMatchResult {
@@ -59,6 +61,7 @@ function calculateClassSimilarity(
 
 /**
  * Extract className attribute value from a JSX element node
+ * enhanced to handle dynamic expressions (clsx, template literals)
  */
 function extractClassName(node: any): string {
   if (!node?.openingElement?.attributes) {
@@ -70,19 +73,113 @@ function extractClassName(node: any): string {
       if (attr.value?.type === "StringLiteral") {
         return attr.value.value || "";
       } else if (attr.value?.type === "JSXExpressionContainer") {
-        const expression = attr.value.expression;
-        if (expression?.type === "StringLiteral") {
-          return expression.value || "";
-        } else if (expression?.type === "TemplateLiteral") {
-          const staticParts =
-            expression.quasis?.map((q: any) => q.value.cooked).join(" ") || "";
-          return staticParts;
-        }
+        return extractDynamicClasses(attr.value.expression).join(" ");
       }
     }
   }
 
   return "";
+}
+
+/**
+ * Recursively extract static class names from expressions
+ */
+/**
+ * Recursively extract static class names from expressions
+ */
+export function extractDynamicClasses(expr: any): string[] {
+  const classes: string[] = [];
+
+  if (!expr) return classes;
+
+  const visit = (node: any) => {
+    if (!node) return;
+
+    switch (node.type) {
+      case "StringLiteral":
+      case "Literal":
+        if (typeof node.value === "string") {
+          classes.push(...node.value.split(/\s+/).filter(Boolean));
+        }
+        break;
+      case "TemplateLiteral":
+        node.quasis.forEach((quasi: any) => {
+          const raw = quasi.value?.cooked ?? quasi.value?.raw ?? "";
+          if (raw) {
+            classes.push(...raw.split(/\s+/).filter(Boolean));
+          }
+        });
+        break;
+      case "ConditionalExpression":
+        visit(node.consequent);
+        visit(node.alternate);
+        break;
+      case "LogicalExpression":
+        visit(node.left);
+        visit(node.right);
+        break;
+      case "CallExpression":
+        // Handle clsx, cn, classNames, etc.
+        node.arguments.forEach((arg: any) => visit(arg));
+        break;
+      case "ArrayExpression":
+        node.elements.forEach((element: any) => visit(element));
+        break;
+      case "ObjectExpression":
+        // Handle { 'class-name': condition }
+        node.properties.forEach((prop: any) => {
+          if (!prop) return;
+          if (prop.key && (prop.key.type === "StringLiteral" || prop.key.type === "Literal")) {
+             classes.push(...(prop.key.value as string).split(/\s+/).filter(Boolean));
+          } else if (prop.key && prop.key.type === "Identifier") {
+             classes.push(prop.key.name);
+          }
+        });
+        break;
+      case "JSXExpressionContainer":
+        visit(node.expression);
+        break;
+    }
+  };
+
+  visit(expr);
+  return classes;
+}
+
+export function sanitizeClassTokens(className?: string): Set<string> {
+  if (!className) {
+    return new Set();
+  }
+
+  return new Set(
+    className
+      .split(/\s+/)
+      .map((token) => token.trim().toLowerCase())
+      .filter(
+        (token) =>
+          token &&
+          !token.startsWith("brakit-") &&
+          token !== "brakit-reorderable" &&
+          token !== "brakit-shake"
+      )
+  );
+}
+
+export function hasClassOverlap(
+  targetTokens: Set<string>,
+  nodeTokens: Set<string>
+): boolean {
+  if (targetTokens.size === 0 || nodeTokens.size === 0) {
+    return false;
+  }
+
+  for (const token of targetTokens) {
+    if (nodeTokens.has(token)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function extractAttributeValue(node: any): string | null {
@@ -148,66 +245,134 @@ function extractStringAttributes(node: any): { name: string; value: string }[] {
  * Extract text content from JSX element children
  */
 function extractText(node: any): string {
-  if (!node?.children) {
-    return "";
-  }
-
   const texts: string[] = [];
-  for (const child of node.children) {
-    if (child.type === "JSXText" && child.value) {
-      texts.push(child.value);
-    } else if (child.type === "JSXExpressionContainer") {
-      texts.push("[dynamic]");
+
+  const visit = (child: any) => {
+    if (!child) return;
+
+    switch (child.type) {
+      case "JSXText":
+        if (child.value) {
+          texts.push(child.value);
+        }
+        break;
+      case "JSXExpressionContainer": {
+        const expr = child.expression;
+        if (!expr) {
+          return;
+        }
+        if (
+          expr.type === "StringLiteral" ||
+          expr.type === "Literal" ||
+          typeof expr.value === "string"
+        ) {
+          texts.push(expr.value);
+        } else if (
+          expr.type === "TemplateLiteral" &&
+          (expr.expressions?.length ?? 0) === 0
+        ) {
+          texts.push(
+            expr.quasis?.map((q: any) => q.value.cooked).join("") ?? ""
+          );
+        } else {
+          // Dynamic text marker so we can relax matching if needed
+          texts.push("__DYNAMIC__");
+        }
+        break;
+      }
+      case "JSXElement":
+      case "JSXFragment":
+        (child.children || []).forEach(visit);
+        break;
+      default:
+        break;
     }
-  }
+  };
+
+  (node?.children || []).forEach(visit);
 
   return normalizeText(texts.filter(Boolean).join(" "));
 }
 
 /**
  * Find the best matching element from a list of candidates
- * Uses className similarity as the primary matching criterion
+ * Uses className similarity, text matching, and sibling index as signals.
  *
  * @param candidates - Array of candidate elements
  * @param clickedClassName - className of the element the user clicked
  * @param clickedText - text content of the element the user clicked (for fallback)
+ * @param clickedIndex - index of the element among its siblings (0-based)
  * @returns The best matching element, or null if no good match found
  */
 export function findBestMatch(
   candidates: ElementMatchCandidate[],
   clickedClassName: string,
-  clickedText: string
+  clickedText: string,
+  clickedIndex?: number
 ): ElementMatchResult | null {
   if (candidates.length === 0) {
     return null;
   }
 
   if (candidates.length === 1) {
-    return {
-      node: candidates[0].node,
-      path: candidates[0].path,
-      score: 1.0,
-      reason: "Only one candidate",
-    };
+    // Even with one candidate, we should verify it's not a complete mismatch
+    // unless we are very desperate. But for now, preserving original behavior of trusting single candidates
+    // slightly more, but maybe we should check score?
+    // Let's score it to be safe.
   }
 
   logger.info({
-    message: "[ElementMatcher] Multiple candidates, scoring...",
+    message: "[ElementMatcher] Scoring candidates",
     context: {
       count: candidates.length,
       clickedClassName,
       clickedText,
+      clickedIndex,
     },
   });
 
   const normalizedClickedText = normalizeText(clickedText);
 
   const scored = candidates.map((candidate) => {
+    // 1. Class Similarity (0.0 - 1.0)
     const classSimilarity = calculateClassSimilarity(
       clickedClassName,
       candidate.className
     );
 
+    // 2. Text Match (0.0 or 0.1)
+    // If candidate has dynamic text, we are more lenient
+    const hasDynamicText = candidate.text.includes("__DYNAMIC__");
+    const cleanCandidateText = candidate.text.replace(/__DYNAMIC__/g, "").trim();
+    const strippedClicked = normalizedClickedText.replace(/[^a-z0-9]+/g, "");
+    const strippedCandidate = normalizeText(cleanCandidateText).replace(
+      /[^a-z0-9]+/g,
+      ""
+    );
+    
+    let textMatch = 0;
+    if (normalizedClickedText && cleanCandidateText) {
+        if (cleanCandidateText.includes(normalizedClickedText) || normalizedClickedText.includes(cleanCandidateText)) {
+            textMatch = 0.2; // Boosted text match weight
+        } else if (
+          strippedClicked &&
+          strippedCandidate &&
+          (strippedCandidate.includes(strippedClicked) ||
+            strippedClicked.includes(strippedCandidate))
+        ) {
+          // Allow matches that only differ by whitespace/punctuation (e.g., "Active users18,245" vs "Active users 18,245")
+          textMatch = 0.2;
+        }
+    } else if (normalizedClickedText && hasDynamicText) {
+        // If we have text but candidate is dynamic, we can't be sure. 
+        // We don't penalize, but we don't award full points.
+        textMatch = 0.05; 
+    } else if (!normalizedClickedText && !cleanCandidateText) {
+        // Both empty
+        textMatch = 0.1;
+    }
+
+    // 3. Attribute Match (0.0 or 0.3)
     const attributeMatch = candidate.attributes.some((attr) => {
       const normalizedAttr = normalizeText(attr.value);
       if (!normalizedAttr || !normalizedClickedText) {
@@ -222,21 +387,39 @@ export function findBestMatch(
       ? 0.3
       : 0;
 
-    const textMatch =
-      normalizedClickedText && candidate.text.includes(normalizedClickedText)
-        ? 0.1
-        : 0;
+    // 4. Sibling Index Match (0.0 or 0.15)
+    // We treat this as a secondary signal.
+    let indexMatch = 0;
+    if (clickedIndex !== undefined && candidate.siblingIndex !== undefined) {
+        // Exact match
+        if (clickedIndex === candidate.siblingIndex) {
+            indexMatch = 0.15;
+        } 
+        // Close match (off by one due to text nodes/comments?)
+        else if (Math.abs(clickedIndex - candidate.siblingIndex) <= 1) {
+            indexMatch = 0.05;
+        }
+    }
 
-    const totalScore = classSimilarity + textMatch + attributeMatch;
+    // Structure-First Override:
+    // If text doesn't match, but Class + Index + Tag are strong, we boost.
+    // (Tag is implicitly matched by caller usually, but we have it in candidate)
+    let structureBonus = 0;
+    if (classSimilarity > 0.8 && indexMatch > 0.1) {
+        structureBonus = 0.2;
+    }
+
+    const totalScore = classSimilarity + textMatch + attributeMatch + indexMatch + structureBonus;
 
     logger.info({
       message: "[ElementMatcher] Candidate scored",
       context: {
         candidateClassName: candidate.className,
-        candidateText: candidate.text,
         classSimilarity,
         textMatch,
         attributeMatch,
+        indexMatch,
+        structureBonus,
         totalScore,
       },
     });
@@ -246,11 +429,7 @@ export function findBestMatch(
       path: candidate.path,
       attributeScore: attributeMatch,
       score: totalScore,
-      reason: `className similarity: ${classSimilarity.toFixed(
-        2
-      )}, text match: ${textMatch.toFixed(2)}, attribute match: ${attributeMatch.toFixed(
-        2
-      )}`,
+      reason: `class: ${classSimilarity.toFixed(2)}, text: ${textMatch.toFixed(2)}, attr: ${attributeMatch.toFixed(2)}, index: ${indexMatch.toFixed(2)}`,
     };
   });
 
@@ -259,67 +438,31 @@ export function findBestMatch(
   const best = scored[0];
   const secondBest = scored[1];
 
-  const noConfidence =
-    best.score <= 0 && (!secondBest || secondBest.score <= 0);
-
-  if (!secondBest) {
-    if (noConfidence) {
-      logger.warn({
-        message: "[ElementMatcher] Unable to determine best match (no confidence)",
-        context: {
-          bestScore: best.score,
-          bestReason: best.reason,
-        },
+  // Thresholds
+  if (best.score < 0.1) {
+       logger.warn({
+        message: "[ElementMatcher] No confident match (score too low)",
+        context: { bestScore: best.score },
       });
       return null;
-    }
+  }
 
-    logger.info({
-      message: "[ElementMatcher] Single candidate selected",
-      context: {
-        score: best.score,
-        reason: best.reason,
-      },
-    });
+  if (!secondBest) {
     return best;
   }
 
-  if (noConfidence) {
-    logger.warn({
-      message: "[ElementMatcher] No confident match (all scores zero)",
-      context: {
-        bestScore: best.score,
-        secondBestScore: secondBest.score,
-      },
-    });
-    return null;
-  }
-
+  // Margin of error
   if (best.score > secondBest.score + 0.1) {
-    logger.info({
-      message: "[ElementMatcher] Best match found",
-      context: {
-        score: best.score,
-        reason: best.reason,
-      },
-    });
     return best;
   }
 
+  // Tie-breakers
   if ((best.attributeScore ?? 0) > (secondBest.attributeScore ?? 0)) {
-    logger.info({
-      message: "[ElementMatcher] Attribute match resolved tie",
-      context: {
-        score: best.score,
-        reason: best.reason,
-        attributeScore: best.attributeScore,
-      },
-    });
     return best;
   }
 
   logger.warn({
-    message: "[ElementMatcher] Ambiguous match, scores too close",
+    message: "[ElementMatcher] Ambiguous match",
     context: {
       bestScore: best.score,
       secondBestScore: secondBest.score,
@@ -333,11 +476,22 @@ export function findBestMatch(
  * Create a candidate from a JSX element node and path
  */
 export function createCandidate(node: any, path: any): ElementMatchCandidate {
+  // Calculate sibling index if possible
+  // jscodeshift paths usually have a 'name' or 'key' property that is the index in the parent array
+  let siblingIndex = -1;
+  if (typeof path.key === 'number') {
+      siblingIndex = path.key;
+  } else if (typeof path.name === 'number') {
+      siblingIndex = path.name;
+  }
+
   return {
     node,
     path,
     className: extractClassName(node),
     text: extractText(node),
     attributes: extractStringAttributes(node),
+    siblingIndex,
+    tagName: node.openingElement?.name?.name || "unknown"
   };
 }

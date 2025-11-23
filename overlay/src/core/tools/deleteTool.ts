@@ -207,11 +207,17 @@ export class DeleteTool extends BaseTool {
     // Try to determine the current page file from the URL
     const currentPageFile = this.getCurrentPageFile();
 
+    // Determine a robust identifier for backend validation
+    const elementIdentifier =
+      primaryText ||
+      element.id ||
+      `${element.tagName.toLowerCase()}[${this.getSiblingIndex(element)}]`;
+
     this.pendingDeleteData = {
       file: metadata.filePath || currentPageFile || "unknown",
       tag: componentName,
       text: identifier,
-      identifier: identifier,
+      identifier: elementIdentifier, // Use the robust identifier here
       element,
       className: metadata.className,
       elementTag: metadata.elementTag || componentName,
@@ -272,6 +278,16 @@ export class DeleteTool extends BaseTool {
       this.confirmationDialog.closeDialog();
     }
     this.dialogOpen = false;
+  }
+
+  private getSiblingIndex(element: HTMLElement): number {
+    let index = 0;
+    let sibling = element.previousElementSibling;
+    while (sibling) {
+      index++;
+      sibling = sibling.previousElementSibling;
+    }
+    return index;
   }
 
   private cleanup() {
