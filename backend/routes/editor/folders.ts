@@ -64,6 +64,7 @@ async function resolveBaseDirectories(
   projectRoot: string,
   info: FrameworkInfo
 ): Promise<string[]> {
+  // Prefer framework-detected roots; otherwise fallback to common patterns
   const candidates =
     info.pageRoots && info.pageRoots.length > 0
       ? info.pageRoots

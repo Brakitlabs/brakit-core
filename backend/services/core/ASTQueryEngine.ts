@@ -21,7 +21,7 @@ import {
   ProjectComponentUsageMatch,
 } from "../shared/types";
 import { normalizeText } from "../shared/textUtils";
-import { createCandidate, ElementMatchCandidate } from "../shared/elementMatcher";
+import { createCandidate, ElementMatchCandidate } from "../shared/elementMatcher/index";
 
 // Helper to resolve element names
 function resolveJSXElementName(

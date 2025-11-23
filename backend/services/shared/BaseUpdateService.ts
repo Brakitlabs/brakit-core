@@ -34,7 +34,7 @@ import {
   findBestMatch,
   createCandidate,
   type ElementMatchCandidate,
-} from "./elementMatcher";
+} from "./elementMatcher/index";
 import { resolveFilePath as resolveFilePathUtil } from "../../utils/fileResolver";
 import { normalizeText as normalizeTextUtil } from "./textUtils";
 import { actionHistory } from "../history";
@@ -122,7 +122,7 @@ import {
   extractDynamicClasses,
   sanitizeClassTokens,
   hasClassOverlap,
-} from "./elementMatcher";
+} from "./elementMatcher/index";
 
 /**
  * Base service for AST-based updates to React/JSX files.
