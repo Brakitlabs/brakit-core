@@ -8,6 +8,7 @@ export interface UndoUiState {
   timestamp?: string;
   fileCount?: number;
   attention?: boolean;
+  actionId?: string;
 }
 
 interface UndoManagerOptions {
@@ -24,6 +25,7 @@ export class UndoManager {
   };
   private initialized = false;
   private attentionTimeout: ReturnType<typeof setTimeout> | null = null;
+  private refreshRequestId = 0;
 
   constructor(options: UndoManagerOptions) {
     this.backend = options.backend;
@@ -47,8 +49,14 @@ export class UndoManager {
   }
 
   async refreshState(): Promise<void> {
+    const requestId = ++this.refreshRequestId;
     try {
       const status = await this.backend.getHistoryStatus();
+      if (requestId !== this.refreshRequestId) {
+        logger.debug("Ignoring stale history status response", { requestId });
+        return;
+      }
+
       if (!status.success) {
         logger.warn("History status request failed; keeping previous state");
         return;
@@ -61,6 +69,7 @@ export class UndoManager {
           timestamp: undefined,
           fileCount: undefined,
           attention: false,
+          actionId: undefined,
         });
         return;
       }
@@ -70,6 +79,7 @@ export class UndoManager {
         label: status.action.label,
         timestamp: status.action.timestamp,
         fileCount: status.action.fileCount,
+        actionId: status.action.id,
       });
     } catch (error) {
       logger.warn("Failed to refresh undo status", error);
@@ -108,25 +118,47 @@ export class UndoManager {
     options?: { skipAttentionCheck?: boolean }
   ) {
     const previous = this.state;
-    this.state = {
+    const nextState = {
       ...this.state,
       ...patch,
     };
-    this.onStateChange?.({ ...this.state });
+
+    const changed =
+      previous.available !== nextState.available ||
+      previous.busy !== nextState.busy ||
+      previous.label !== nextState.label ||
+      previous.timestamp !== nextState.timestamp ||
+      previous.fileCount !== nextState.fileCount ||
+      previous.attention !== nextState.attention ||
+      previous.actionId !== nextState.actionId;
+
+    this.state = nextState;
+
+    if (changed) {
+      this.onStateChange?.({ ...this.state });
+    }
 
     if (options?.skipAttentionCheck) {
       return;
     }
 
-    if (!previous.available && this.state.available) {
+    const becameAvailable = !previous.available && nextState.available;
+    const becameUnavailable = previous.available && !nextState.available;
+    const newActionWhileAvailable =
+      previous.available &&
+      nextState.available &&
+      previous.actionId !== nextState.actionId &&
+      typeof nextState.actionId === "string";
+
+    if (becameAvailable || newActionWhileAvailable) {
       this.startAttentionPulse();
-    } else if (previous.available && !this.state.available) {
-      this.stopAttentionPulse(true);
+    } else if (becameUnavailable) {
+      this.stopAttentionPulse();
     }
   }
 
   private startAttentionPulse() {
-    this.stopAttentionPulse(false);
+    this.stopAttentionPulse();
     this.updateState({ attention: true }, { skipAttentionCheck: true });
     this.attentionTimeout = setTimeout(() => {
       this.updateState({ attention: false }, { skipAttentionCheck: true });
@@ -134,16 +166,13 @@ export class UndoManager {
     }, 2200);
   }
 
-  private stopAttentionPulse(emitUpdate: boolean) {
+  private stopAttentionPulse() {
     if (this.attentionTimeout) {
       clearTimeout(this.attentionTimeout);
       this.attentionTimeout = null;
     }
     if (this.state.attention) {
-      this.state = { ...this.state, attention: false };
-      if (emitUpdate) {
-        this.onStateChange?.({ ...this.state });
-      }
+      this.updateState({ attention: false }, { skipAttentionCheck: true });
     }
   }
 }
