@@ -151,6 +151,23 @@ export interface UndoActionResponse {
   action?: HistoryActionSummary;
 }
 
+export interface DesignTokensResponse {
+  success: boolean;
+  tokens: any; // W3C format tokens
+  resolved: {
+    color: Record<string, string>;
+    typography: Record<string, string>;
+    spacing: Record<string, string>;
+    radius: Record<string, string>;
+    shadow: Record<string, string>;
+    layout: Record<string, string>;
+    border: Record<string, string>;
+    opacity: Record<string, string>;
+    zIndex: Record<string, string>;
+  };
+  error?: string;
+}
+
 export class BackendClient {
   private baseUrl: string;
   private historyListeners = new Set<() => void>();
@@ -240,6 +257,87 @@ export class BackendClient {
       const message =
         error instanceof Error ? error.message : "Failed to load folders";
       logger.error("Failed to fetch folders", error);
+      throw new Error(message);
+    }
+  }
+
+  async getDesignTokens(): Promise<DesignTokensResponse> {
+    const endpoint = `${this.baseUrl}/api/editor/tokens`;
+    logger.debug("Fetching design tokens", { endpoint });
+
+    try {
+      const response = await fetch(endpoint);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.success !== true) {
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : `Failed with status ${response.status}`;
+        throw new Error(message);
+      }
+
+      return { success: true, tokens: data.tokens, resolved: data.resolved };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load design tokens";
+      logger.error("Failed to fetch design tokens", error);
+      throw new Error(message);
+    }
+  }
+
+  async getDefaultDesignTokens(): Promise<DesignTokensResponse> {
+    const endpoint = `${this.baseUrl}/api/editor/tokens/defaults`;
+    logger.debug("Fetching default design tokens", { endpoint });
+
+    try {
+      const response = await fetch(endpoint);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.success !== true) {
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : `Failed with status ${response.status}`;
+        throw new Error(message);
+      }
+
+      return { success: true, tokens: data.tokens, resolved: data.resolved };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load default design tokens";
+      logger.error("Failed to fetch default design tokens", { error: message });
+      throw new Error(message);
+    }
+  }
+
+  async saveDesignTokens(tokens: any): Promise<DesignTokensResponse> {
+    const endpoint = `${this.baseUrl}/api/editor/tokens`;
+    logger.debug("Saving design tokens", { endpoint });
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tokens }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.success !== true) {
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : `Failed with status ${response.status}`;
+        throw new Error(message);
+      }
+
+      return { success: true, tokens: data.tokens, resolved: data.resolved };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to save design tokens";
+      logger.error("Failed to save design tokens", error);
       throw new Error(message);
     }
   }

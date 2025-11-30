@@ -82,6 +82,13 @@ export class FloatingToolbar {
             <span class="brakit-tool-meta"></span>
           </span>
         </button>
+
+        <div class="brakit-toolbar-divider"></div>
+
+        <button data-action="settings" class="brakit-tool-btn brakit-settings-btn" title="Design Tokens">
+          <span class="brakit-tool-icon">⚙️</span>
+          <span class="brakit-tool-label">Settings</span>
+        </button>
       </div>
 
       <button class="brakit-toolbar-close" data-action="close" title="Close (Esc)">
@@ -357,9 +364,16 @@ export class FloatingToolbar {
         "[data-action='new-page']"
       ) as HTMLElement | null;
       if (newPageButton) {
-        console.log("📄 New Page button clicked, dispatching event");
         this.document.dispatchEvent(
           new CustomEvent("brakit:new-page", {
+            detail: {},
+          })
+        );
+      }
+
+      if (target.closest("[data-action='settings']")) {
+        this.document.dispatchEvent(
+          new CustomEvent("brakit:open-settings", {
             detail: {},
           })
         );
@@ -457,13 +471,11 @@ export class FloatingToolbar {
   mount() {
     if (!this.document.body) {
       logger.warn("Cannot mount toolbar: document.body is null");
-      // Retry when DOM is ready with multiple strategies
       if (this.document.readyState === "loading") {
         this.document.addEventListener("DOMContentLoaded", () => this.mount(), {
           once: true,
         });
       } else {
-        // If document is not loading but body is still null, try again after a short delay
         setTimeout(() => {
           if (this.document.body) {
             this.document.body.appendChild(this.container);
