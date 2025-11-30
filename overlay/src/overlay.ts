@@ -4,10 +4,12 @@ import "./components/BrakitToast.js";
 import "./components/SmartEditWarning.js";
 import "./components/PageBuilderModal.js";
 import "./components/LoadingOverlay.js";
+import "./components/DesignTokensPanel";
 // @ts-ignore
 import highlightStyles from "./styles/highlights.css?raw";
 import { OverlayController } from "./core/overlayController";
 import { ModalManager } from "./core/managers/modalManager";
+import { TokenManager } from "./core/managers/tokenManager";
 import { BackendClient, EditorContextInfo } from "./services/backendClient";
 import { ElementPayloadService } from "./payload/ElementPayloadService";
 import { logger } from "./utils/logger";
@@ -20,6 +22,7 @@ import type { OverlayPluginContext } from "./plugins/types";
 class BrakitOverlayApp {
   private controller: OverlayController;
   private backend: BackendClient;
+  private tokenManager: TokenManager;
   private subsystems: InitializedSubsystems;
   private bubble: HTMLElement | null = null;
   private toast: any | null = null;
@@ -27,6 +30,7 @@ class BrakitOverlayApp {
   private observer: MutationObserver | null = null;
   private payloadService: ElementPayloadService;
   private pageBuilderModal: any | null = null;
+  private designTokensPanel: any | null = null;
   private editorContext: EditorContextInfo | null = null;
   private pageFolders: string[] = [];
   private isFetchingPageBuilderData = false;
@@ -39,6 +43,7 @@ class BrakitOverlayApp {
   constructor() {
     this.injectHighlightStyles();
     this.backend = new BackendClient();
+    this.tokenManager = new TokenManager();
     this.controller = new OverlayController({
       document,
       backendClient: this.backend,
@@ -51,11 +56,14 @@ class BrakitOverlayApp {
     this.ensureToast();
     this.ensureSmartEditWarning();
     this.ensurePageBuilderModal();
+    this.ensureDesignTokensPanel();
     this.ensureLoadingOverlay();
     this.observeDom();
     this.setupDeleteListener();
     this.setupPageBuilderListener();
+    this.setupDesignTokensListener();
     void this.ensureEditorContextLoaded();
+    void this.loadDesignTokens();
     this.pluginHost.initialize(() => this.buildPluginContext());
     this.flushPendingPluginSelections();
   }
@@ -67,7 +75,107 @@ class BrakitOverlayApp {
       backend: this.backend,
       controller: this.controller,
       payloadService: this.payloadService,
+      tokenManager: this.tokenManager,
+      tokens: this.tokenManager.getResolvedTokens(),
     };
+  }
+
+  private async loadDesignTokens(): Promise<void> {
+    try {
+      const tokensResponse = await this.backend.getDesignTokens();
+      this.tokenManager.setTokens(tokensResponse);
+      logger.info("Design tokens loaded successfully");
+      
+      // Update panel if it exists
+      if (this.designTokensPanel) {
+        this.designTokensPanel.setTokens(
+          tokensResponse.tokens,
+          tokensResponse.resolved
+        );
+      }
+    } catch (error) {
+      logger.warn("Failed to load design tokens", error);
+    }
+  }
+
+  private ensureDesignTokensPanel() {
+    const attach = (element: Element) => {
+      this.designTokensPanel = element as any;
+    };
+
+    if (!document.body) {
+      document.addEventListener(
+        "DOMContentLoaded",
+        () => this.ensureDesignTokensPanel(),
+        { once: true }
+      );
+      return;
+    }
+
+    const existing = document.querySelector("brakit-design-tokens");
+    if (existing) {
+      attach(existing);
+      return;
+    }
+
+    const element = document.createElement("brakit-design-tokens");
+    document.body.appendChild(element);
+    attach(element);
+  }
+
+  private setupDesignTokensListener() {
+    document.addEventListener("brakit:open-settings", () => {
+      this.ensureDesignTokensPanel();
+      if (this.designTokensPanel) {
+        this.designTokensPanel.openPanel();
+      }
+    });
+
+    document.addEventListener("brakit:save-tokens", async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { tokens } = customEvent.detail;
+      
+      try {
+        const response = await this.backend.saveDesignTokens(tokens);
+        this.tokenManager.setTokens(response);
+        
+        // Update panel with resolved tokens
+        if (this.designTokensPanel) {
+          this.designTokensPanel.setTokens(
+            response.tokens,
+            response.resolved
+          );
+          // Close panel after successful save
+          this.designTokensPanel.closePanel();
+        }
+        
+        // Show success toast
+        // this.showToast("Design tokens saved successfully", "success");
+        logger.info("Design tokens saved successfully");
+      } catch (error) {
+        logger.error("Failed to save design tokens", error);
+        // this.showToast("Failed to save design tokens", "error");
+      }
+    });
+
+    document.addEventListener("brakit:reset-tokens", async () => {
+      try {
+        const response = await this.backend.getDefaultDesignTokens();
+        this.tokenManager.setTokens(response);
+        
+        // Update panel with resolved tokens
+        if (this.designTokensPanel) {
+          this.designTokensPanel.setTokens(
+            response.tokens,
+            response.resolved
+          );
+        }
+        
+        logger.info("Design tokens reset to defaults successfully");
+      } catch (error) {
+        logger.error("Failed to reset design tokens", error);
+      }
+    });
   }
 
   private injectHighlightStyles() {

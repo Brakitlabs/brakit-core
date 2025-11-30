@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
+import type { ResolvedTokens } from "./tokens";
+import { tokenService } from "./tokens";
 
 export type FormFieldType =
   | "text"
@@ -197,9 +199,10 @@ export function generateFormCode(
   spec: FormSpec,
   identifiers: IdentifierOptions
 ): GeneratedFormCode {
+  const tokens = tokenService.getResolvedTokens();
   const schemaDeclaration = buildSchema(spec, identifiers.schemaName);
   const setupCode = buildSetup(spec, identifiers);
-  const formJsx = buildFormJsx(spec, identifiers);
+  const formJsx = buildFormJsx(spec, identifiers, tokens);
 
   return {
     schemaName: identifiers.schemaName,
@@ -296,18 +299,27 @@ function ${identifiers.submitHandlerName}(values: z.infer<typeof ${identifiers.s
 }`;
 }
 
-function buildFormJsx(spec: FormSpec, identifiers: IdentifierOptions): string {
+function buildFormJsx(
+  spec: FormSpec,
+  identifiers: IdentifierOptions,
+  tokens: ResolvedTokens
+): string {
+  const c = tokens.color;
+  const t = tokens.typography;
+  const r = tokens.radius;
+  const s = tokens.spacing;
+  const sh = tokens.shadow;
   const fieldBlocks = spec.fields
-    .map((field) => buildFieldBlock(field, identifiers.formVarName))
+    .map((field) => buildFieldBlock(field, identifiers.formVarName, tokens))
     .join("\n\n");
 
   const description = spec.description
-    ? `<p className="text-sm text-muted-foreground">${spec.description}</p>`
+    ? `<p className="${t["body-sm"]} ${c["text-muted"]}">${spec.description}</p>`
     : "";
 
-  return `<div className="flex h-full w-full flex-col overflow-auto rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+  return `<div className="flex h-full w-full flex-col overflow-auto ${r.default} border ${c["border-subtle"]} ${c.surface} ${sh.default} ${s["space-lg"]} ${c["text-main"]}">
   <div className="space-y-1">
-    <h3 className="text-2xl font-semibold tracking-tight">${spec.title}</h3>
+    <h3 className="${t.h2} ${c["text-main"]}">${spec.title}</h3>
     ${description}
   </div>
   <Form {...${identifiers.formVarName}}>
@@ -315,7 +327,7 @@ function buildFormJsx(spec: FormSpec, identifiers: IdentifierOptions): string {
       <div className="flex-1 space-y-4 overflow-auto">
 ${indent(fieldBlocks, 8)}
       </div>
-      <Button type="submit" className="w-full">
+      <Button type="submit" className="w-full ${r.default} ${c.primary} ${t["body-sm"]} font-semibold text-white ${sh.default} transition hover:-translate-y-0.5 hover:${sh.default}">
         ${spec.submitLabel}
       </Button>
     </form>
@@ -323,30 +335,39 @@ ${indent(fieldBlocks, 8)}
 </div>`;
 }
 
-function buildFieldBlock(field: FormFieldSpec, formVarName: string): string {
+function buildFieldBlock(
+  field: FormFieldSpec,
+  formVarName: string,
+  tokens: ResolvedTokens
+): string {
+  const c = tokens.color;
+  const t = tokens.typography;
+  const r = tokens.radius;
+  const s = tokens.spacing;
   const nameAccessor = `${formVarName}.control`;
 
   if (field.type === "checkbox") {
     const description = field.description
-      ? `<FormDescription>${field.description}</FormDescription>`
+      ? `<FormDescription className="${t["body-sm"]} ${c["text-muted"]}">${field.description}</FormDescription>`
       : "";
 
     return `<FormField
   control={${nameAccessor}}
   name="${field.name}"
   render={({ field }) => (
-    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-muted bg-background/40 p-4">
+    <FormItem className="flex flex-row items-start gap-3 rounded-md border ${c["border-subtle"]} ${c["surface-alt"]} ${s["space-sm"]}">
       <FormControl>
         <Checkbox
           checked={Boolean(field.value)}
           onCheckedChange={(checked) => field.onChange(checked === true)}
+          className="border ${c["border-subtle"]} ${c.surface} ${r.default}"
         />
       </FormControl>
       <div className="space-y-1 leading-none">
-        <FormLabel>${field.label}</FormLabel>
+        <FormLabel className="${t["body-sm"]} ${c["text-main"]}">${field.label}</FormLabel>
         ${description}
       </div>
-      <FormMessage />
+      <FormMessage className="${t["body-sm"]}" />
     </FormItem>
   )}
 />`;
@@ -354,11 +375,11 @@ function buildFieldBlock(field: FormFieldSpec, formVarName: string): string {
 
   const controlElement =
     field.type === "textarea"
-      ? `<Textarea placeholder="${field.placeholder ?? ""}" {...field} />`
-      : `<Input type="${mapFieldTypeToInput(field.type)}" placeholder="${field.placeholder ?? ""}" {...field} />`;
+      ? `<Textarea className="${r.default} border ${c["border-subtle"]} ${c.surface} ${c["text-main"]} ${t.body}" placeholder="${field.placeholder ?? ""}" {...field} />`
+      : `<Input className="${r.default} border ${c["border-subtle"]} ${c.surface} ${c["text-main"]} ${t.body}" type="${mapFieldTypeToInput(field.type)}" placeholder="${field.placeholder ?? ""}" {...field} />`;
 
   const description = field.description
-    ? `<FormDescription>${field.description}</FormDescription>`
+    ? `<FormDescription className="${t["body-sm"]} ${c["text-muted"]}">${field.description}</FormDescription>`
     : "";
 
   return `<FormField
@@ -366,12 +387,12 @@ function buildFieldBlock(field: FormFieldSpec, formVarName: string): string {
   name="${field.name}"
   render={({ field }) => (
     <FormItem>
-      <FormLabel>${field.label}</FormLabel>
+      <FormLabel className="${t["body-sm"]} ${c["text-main"]}">${field.label}</FormLabel>
       <FormControl>
         ${controlElement}
       </FormControl>
       ${description}
-      <FormMessage />
+      <FormMessage className="${t["body-sm"]}" />
     </FormItem>
   )}
 />`;
