@@ -7,6 +7,8 @@ import {
   TokenFileReadError,
   TokenParseError,
 } from "./errors";
+import { TokenCodeGenerator } from "./generators/TokenCodeGenerator";
+import { configureTsConfigPaths } from "./configureTsConfig";
 
 /**
  * Token Service
@@ -16,12 +18,20 @@ class TokenService {
   private tokens: BrakitDesignTokens;
   private resolvedTokens: ResolvedTokens | null = null;
   private readonly tokensFilePath: string;
+  private codeGenerator: TokenCodeGenerator;
 
   constructor() {
     this.tokensFilePath = this.getTokensFilePath();
+    this.codeGenerator = new TokenCodeGenerator();
     this.tokens = this.applyDefaults(
       this.loadFromDisk() ?? defaultDesignTokens
     );
+    
+    // Generate code on initialization (async, non-blocking)
+    this.regenerateCode().catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error("Failed to generate token code on initialization:", error);
+    });
   }
 
   /**
@@ -56,11 +66,32 @@ class TokenService {
   }
 
   /**
+   * Regenerate code files (tokens.js, tokens.d.ts, bindings.css)
+   */
+  async regenerateCode(): Promise<void> {
+    await this.codeGenerator.generateAll(this.tokens);
+    
+    // Auto-configure tsconfig path alias (only runs once if not already configured)
+    const projectRoot = process.env.PROJECT_ROOT || process.cwd();
+    await configureTsConfigPaths(projectRoot).catch((error: unknown) => {
+      // Non-critical, just log warning
+      // eslint-disable-next-line no-console
+      console.warn("Could not auto-configure tsconfig paths:", error);
+    });
+  }
+
+  /**
    * Load/update tokens (for file persistence)
    */
   loadTokens(tokens: BrakitDesignTokens): void {
     this.tokens = this.applyDefaults(tokens);
     this.resolvedTokens = null; // Invalidate cache
+    
+    // Regenerate code files (async, non-blocking)
+    this.regenerateCode().catch((error: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error("Failed to regenerate token code:", error);
+    });
   }
 
   /**
@@ -76,6 +107,12 @@ class TokenService {
   resetToDefaults(): void {
     this.tokens = defaultDesignTokens;
     this.resolvedTokens = null;
+    
+    // Regenerate code files
+    this.regenerateCode().catch((error: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error("Failed to regenerate token code:", error);
+    });
   }
 
   /**
@@ -86,6 +123,12 @@ class TokenService {
     if (loaded) {
       this.tokens = this.applyDefaults(loaded);
       this.resolvedTokens = null;
+      
+      // Regenerate code files
+      this.regenerateCode().catch((error: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error("Failed to regenerate token code:", error);
+      });
     }
   }
 
