@@ -742,6 +742,58 @@ export class BackendClient {
     }
   }
 
+  async fixTokenDrift(payload: any): Promise<any> {
+    const endpoint = `${this.baseUrl}/api/plugin/update`;
+    logger.debug("Submitting token fix", payload);
+
+    const pluginPayload = {
+      type: "token-fix",
+      filePath: payload.filePath,
+      property: payload.property,
+      metadata: {
+        currentValue: payload.currentValue,
+        tokenPath: payload.tokenPath,
+        tokenClass: payload.tokenClass,
+        className: payload.className,
+        tagName: payload.tagName,
+        textContent: payload.textContent,
+        lineNumber: payload.lineNumber,
+        ownerComponentName: payload.ownerComponentName,
+        ownerFilePath: payload.ownerFilePath,
+      },
+    };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(pluginPayload),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const errorMessage =
+          typeof data.error === "string"
+            ? data.error
+            : `Token fix failed with status ${response.status}`;
+        logger.warn("Token fix request failed", errorMessage);
+        return { success: false, message: errorMessage };
+      }
+
+      this.notifyHistoryChange();
+      return data;
+    } catch (error) {
+      logger.error("Token fix request error", error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
   async updateFontFamily(payload: {
     oldFont?: string;
     newFont: string;
@@ -815,7 +867,9 @@ export class BackendClient {
 
 function resolveBackendUrl(): string {
   if (typeof window !== "undefined") {
-    const globalValue = (window as any).BRAKIT_BACKEND_URL;
+    const globalValue =
+      (window as any).BRAKIT_BACKEND_URL ||
+      (window as any).__BRAKIT_BACKEND_URL;
     if (typeof globalValue === "string" && globalValue.length > 0) {
       return globalValue;
     }

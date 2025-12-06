@@ -617,10 +617,22 @@ export abstract class BaseUpdateService {
     const requestedSourcePath = options.file
       ? this.resolveFilePath(options.file)
       : null;
+    const normalizedLookup = this.normalizeText(options.lookupText);
 
-    // Prefer updating the file the user is looking at before falling back to owner hints
+    if (!normalizedLookup) {
+      const hintedEarly = this.resolveFileFromOwnerHints({
+        requestedSourcePath,
+        ownerComponentName: options.ownerComponentName,
+        ownerFilePath: options.ownerFilePath,
+      });
+
+      if (hintedEarly) {
+        return hintedEarly;
+      }
+    }
+
     const localMatch = await this.findFileForText(
-      options.lookupText,
+      normalizedLookup,
       options.tag,
       options.file,
       options.serviceName
@@ -638,6 +650,15 @@ export abstract class BaseUpdateService {
 
     if (hinted) {
       return hinted;
+    }
+
+    if (options.ownerComponentName) {
+      const componentFile = this.findComponentFileByName(
+        options.ownerComponentName
+      );
+      if (componentFile && fs.existsSync(componentFile)) {
+        return componentFile;
+      }
     }
 
     return null;

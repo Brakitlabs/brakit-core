@@ -18,6 +18,7 @@ import type { DrawSelectionResult } from "./core/draw/drawContext";
 import type { InitializedSubsystems } from "./core/orchestrators";
 import { PluginHost } from "./plugins/pluginHost";
 import type { OverlayPluginContext } from "./plugins/types";
+import { getReactSourceInfo } from "./utils/reactSource";
 
 class BrakitOverlayApp {
   private controller: OverlayController;
@@ -77,6 +78,7 @@ class BrakitOverlayApp {
       payloadService: this.payloadService,
       tokenManager: this.tokenManager,
       tokens: this.tokenManager.getResolvedTokens(),
+      getReactSourceInfo,
     };
   }
 

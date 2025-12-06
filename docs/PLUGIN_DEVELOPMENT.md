@@ -1,6 +1,4 @@
-# (Under development) Plugin Development Guide
-
-### **NOTE***: This guide is under development and is subject to change. The plugin might not work as expected. Detailed documentation will be available soon.
+# Brakit Plugin Development Guide
 
 <div align="center">
 
@@ -8,162 +6,398 @@
 
 </div>
 
-This guide is a step-by-step tutorial on how to create your first plugin for Brakit.
+This guide walks you through creating Brakit plugins from scratch. No prior experience with Brakit internals required.
 
-## How It Works
+---
 
-Brakit plugins are simple JavaScript files that run inside the Brakit Overlay on your website. When you run `npx brakit start`, the CLI automatically looks for files in your project's `.brakit/plugins` directory and injects them into the browser.
+## Your First Plugin (5 minutes)
 
-## Prerequisites
+### What You'll Build
 
--   A project with Brakit initialized (you should have a `.brakit` folder).
--   If you haven't initialized Brakit yet, run:
-    ```bash
-    npx brakit init
-    ```
+A toolbar button that shows "Hello World" when clicked.
 
-## Step-by-Step Tutorial: Adding a Toolbar Button
-
-Follow these steps to create a plugin that adds a custom button to the Brakit toolbar.
-
-### 1. Create the Plugins Directory
-
-Inside your project root, navigate to the `.brakit` folder and create a `plugins` directory if it doesn't exist.
+### Step 1: Create the Plugin File
 
 ```bash
+cd your-app
 mkdir -p .brakit/plugins
 ```
 
-### 2. Create a Plugin File
-
-Create a new file named `my-toolbar-plugin.js` inside `.brakit/plugins`.
-
-```
-my-project/
-├── .brakit/
-│   ├── config.json
-│   └── plugins/
-│       └── my-toolbar-plugin.js  <-- Your new file
-├── package.json
-└── ...
-```
-
-### 3. Write the Plugin Code
-
-Open `my-toolbar-plugin.js` and paste the following code. This code waits for the Brakit toolbar to load and then appends a new button to it.
+Create `.brakit/plugins/hello-world.js`:
 
 ```javascript
-// .brakit/plugins/my-toolbar-plugin.js
-
 window.registerBrakitPlugin((context) => {
-  const { document } = context;
+  console.log('Plugin loaded!');
 
-  // Helper to create the button element
-  const createButton = () => {
-    const btn = document.createElement("button");
-    btn.className = "brakit-tool-btn"; // Re-use Brakit's button styles
-    btn.title = "My Custom Plugin";
-    btn.innerHTML = `
-      <span class="brakit-tool-icon">🚀</span>
-      <span class="brakit-tool-label">Launch</span>
-    `;
-    
-    btn.addEventListener("click", () => {
-      alert("🚀 Plugin button clicked!");
-    });
-    
-    return btn;
-  };
-
-  // Helper to find the toolbar and attach the button
-  const attachToToolbar = () => {
-    const toolbar = document.querySelector(".brakit-toolbar-tools");
-    
-    // If toolbar isn't ready yet, we wait (it loads asynchronously)
+  // Add button to toolbar
+  const addButton = () => {
+    const toolbar = document.querySelector('.brakit-toolbar-tools');
     if (!toolbar) return false;
+    if (toolbar.querySelector('[data-hello]')) return true;
 
-    // Avoid adding duplicate buttons
-    if (toolbar.querySelector("[data-my-plugin]")) return true;
+    const btn = document.createElement('button');
+    btn.className = 'brakit-tool-btn';
+    btn.dataset.hello = 'true';
+    btn.innerHTML = `
+      <span class="brakit-tool-icon">👋</span>
+      <span class="brakit-tool-label">Hello</span>
+    `;
+    btn.onclick = () => alert('Hello from your plugin!');
 
-    const button = createButton();
-    button.dataset.myPlugin = "true"; // Mark as ours
-    toolbar.appendChild(button);
-    
+    toolbar.appendChild(btn);
     return true;
   };
 
-  // 1. Try to attach immediately
-  if (attachToToolbar()) return;
+  if (!addButton()) {
+    const observer = new MutationObserver(() => {
+      if (addButton()) observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 
-  // 2. If not found, observe the DOM until the toolbar appears
-  const observer = new MutationObserver(() => {
-    if (attachToToolbar()) {
-      observer.disconnect(); // Stop watching once attached
-    }
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  // 3. Return cleanup function
   return () => {
-    observer.disconnect();
-    const btn = document.querySelector("[data-my-plugin]");
+    const btn = document.querySelector('[data-hello]');
     if (btn) btn.remove();
   };
 });
 ```
 
-### 4. Start the Server
-
-Run the Brakit development server.
+### Step 2: Start Brakit
 
 ```bash
 npx brakit start
 ```
 
-### 5. Verify in Browser
+Open your app → Click Brakit overlay → See your "👋 Hello" button!
 
-Open your local development URL (usually `http://localhost:3000`).
+---
 
-1.  **Open the Brakit Toolbar** (click the bubble in the bottom-right if it's closed).
-2.  Look for your new **"🚀 Launch"** button inside the toolbar.
-3.  Click it to see the alert!
+## Adding a Backend Server
 
-## Advanced Usage
+Most useful plugins modify source code. Here's how to build one.
 
-### Using TypeScript
+### What You'll Build
 
-If you prefer TypeScript, you can write your plugin in `.ts`, but you **must compile it to JavaScript** before Brakit can use it, as the browser cannot run TypeScript directly.
+Click text in your app → Plugin changes it in the actual source file → See changes in your editor.
 
-1.  Write your code in `src/plugins/MyPlugin.ts`.
-2.  Compile it to `.brakit/plugins/MyPlugin.js` using `tsc` or your build tool.
+### Step 1: Create Plugin Directory
 
-### The Plugin Context
+```bash
+mkdir -p brakit-plugins/text-changer
+cd brakit-plugins/text-changer
+npm init -y
+```
 
-The `context` argument passed to your function gives you access to Brakit internals:
+### Step 2: Install Dependencies
+
+```bash
+npm install express cors @babel/parser @babel/traverse @babel/generator @babel/types
+```
+
+### Step 3: Create Server
+
+Create `server.js`:
 
 ```javascript
-window.registerBrakitPlugin((context) => {
-  const { 
-    app,            // Main app instance
-    document,       // The document (use this instead of global document)
-    backend,        // Backend service client
-    payloadService  // For handling data payloads
-  } = context;
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs/promises');
+const { parse } = require('@babel/parser');
+const traverse = require('@babel/traverse').default;
+const generate = require('@babel/generator').default;
 
-  // Example: Show a toast notification using the internal app API
-  if (app.showToast) {
-    app.showToast("Plugin initialized!");
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.post('/change-text', async (req, res) => {
+  try {
+    const { filePath, oldText, newText } = req.body;
+
+    const code = await fs.readFile(filePath, 'utf-8');
+
+    const ast = parse(code, {
+      sourceType: 'module',
+      plugins: ['jsx', 'typescript'],
+    });
+
+    let changed = false;
+    traverse(ast, {
+      StringLiteral(path) {
+        if (path.node.value === oldText) {
+          path.node.value = newText;
+          changed = true;
+        }
+      },
+      JSXText(path) {
+        if (path.node.value.trim() === oldText) {
+          path.node.value = newText;
+          changed = true;
+        }
+      },
+    });
+
+    if (!changed) {
+      return res.json({ success: false, error: 'Text not found' });
+    }
+
+    const output = generate(ast);
+    await fs.writeFile(filePath, output.code);
+
+    console.log(`✅ Changed "${oldText}" to "${newText}"`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
+});
+
+app.listen(4002, () => {
+  console.log('🚀 Text Changer server running on port 4002');
 });
 ```
 
+Add to `package.json`:
+
+```json
+{
+  "scripts": {
+    "start": "node server.js"
+  }
+}
+```
+
+### Step 4: Start the Server
+
+```bash
+npm start
+```
+
+Keep this running in a separate terminal.
+
+### Step 5: Register with Brakit Backend
+
+Go back to your app directory and create a **new file** `.brakit/backend-plugins.js`:
+
+```bash
+cd your-app  # Go back to your app root
+touch .brakit/backend-plugins.js
+```
+
+Add this to `.brakit/backend-plugins.js`:
+
+```javascript
+// .brakit/backend-plugins.js
+module.exports = {
+  plugins: [
+    {
+      name: 'text-changer',
+      endpoint: 'http://localhost:4002/change-text',
+      type: 'text-changer',
+    },
+  ],
+};
+```
+
+Brakit will auto-load this file on startup.
+
+### Step 6: Create Frontend UI
+
+Create a **new file** `.brakit/plugins/text-changer.js`:
+
+```bash
+touch .brakit/plugins/text-changer.js
+```
+
+Add this code to `.brakit/plugins/text-changer.js`:
+
+```javascript
+window.registerBrakitPlugin((context) => {
+  const { getReactSourceInfo } = context;
+  let active = false;
+
+  const btn = document.createElement('button');
+  btn.className = 'brakit-tool-btn';
+  btn.innerHTML = '<span class="brakit-tool-icon">📝</span>';
+  btn.onclick = () => {
+    active = !active;
+    btn.classList.toggle('active', active);
+    document.body.style.cursor = active ? 'crosshair' : '';
+  };
+
+  document.querySelector('.brakit-toolbar-tools')?.appendChild(btn);
+
+  document.addEventListener('click', async (e) => {
+    if (!active) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const text = e.target.textContent?.trim();
+    const sourceInfo = getReactSourceInfo?.(e.target);
+
+    if (!sourceInfo?.fileName) {
+      alert('Cannot find source file');
+      return;
+    }
+
+    const newText = prompt(`Change "${text}" to:`, text);
+    if (!newText || newText === text) return;
+
+    const res = await fetch('http://localhost:3001/api/plugin/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'text-changer',
+        filePath: sourceInfo.fileName,
+        metadata: { oldText: text, newText },
+      }),
+    });
+
+    const result = await res.json();
+    alert(result.success ? '✅ Text changed!' : `❌ ${result.error}`);
+  }, true);
+
+  return () => {
+    btn.remove();
+    document.body.style.cursor = '';
+  };
+});
+```
+
+### Step 7: Test It
+
+1. Start both servers (plugin server + Brakit)
+2. Open your app
+3. Click the "📝" button
+4. Click any text on the page
+5. Enter new text
+6. Check your code editor - file updated! ✨
+
+---
+
+## Plugin API Quick Reference
+
+### Frontend
+
+```javascript
+window.registerBrakitPlugin((context) => {
+  // Main APIs
+  context.document              // Use instead of global document
+  context.backend               // Brakit backend client
+  context.getReactSourceInfo(el) // Get source file + line number
+  context.tokenManager          // Design tokens (if configured)
+
+  // Return cleanup function
+  return () => {
+    // Cleanup logic
+  };
+});
+```
+
+**Get source info:**
+```javascript
+const info = context.getReactSourceInfo(element);
+// { fileName: "src/Button.tsx", lineNumber: 42, componentName: "Button" }
+```
+
+**Call your backend:**
+```javascript
+await fetch('http://localhost:3001/api/plugin/update', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    type: 'your-plugin-type',
+    filePath: 'src/components/Button.tsx',
+    metadata: { /* your data */ },
+  }),
+});
+```
+
+### Backend
+
+```javascript
+pluginRegistry.registerPlugin({
+  name: 'my-plugin',
+  canHandle: (request) => request.type === 'my-plugin',
+  handle: async (request, context) => {
+    // Transform code using @babel/parser, @babel/traverse, @babel/generator
+    return { success: true, filesChanged: [request.filePath] };
+  },
+});
+```
+
+---
+
+## Common Patterns
+
+**Toggle button with active state:**
+```javascript
+let active = false;
+btn.onclick = () => {
+  active = !active;
+  btn.classList.toggle('active', active);
+};
+```
+
+**AST transformation:**
+```javascript
+const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+traverse(ast, {
+  JSXAttribute(path) {
+    // Modify AST
+  },
+});
+const output = generate(ast);
+```
+
+**Wait for toolbar:**
+```javascript
+if (!addButton()) {
+  const observer = new MutationObserver(() => {
+    if (addButton()) observer.disconnect();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+```
+
+---
+
 ## Troubleshooting
 
-**Q: I don't see my button.**
--   Ensure you opened the Brakit toolbar (it might be collapsed).
--   Check the browser console for errors.
--   Restart `npx brakit start` to ensure it picked up the new file.
+**Plugin not loading?**
+- File must be `.js` not `.ts`
+- File must be in `.brakit/plugins/`
+- Access via Brakit proxy (`localhost:3000`), not direct app port
+- Check browser console for errors
 
-**Q: I see "registerBrakitPlugin is not defined".**
--   Make sure you are running your app through the Brakit proxy (e.g., `localhost:3000`), not your direct app port (e.g., `localhost:3333`). The proxy injects the necessary scripts.
+**Backend not responding?**
+- Plugin server running? (`npm start`)
+- CORS enabled? (`app.use(cors())`)
+- Plugin registered in Brakit backend?
+- Check Network tab in browser DevTools
+
+**getReactSourceInfo returns undefined?**
+- Element might not be a React component
+- Check if element has React fiber: `element[Object.keys(element).find(k => k.startsWith('__reactFiber'))]`
+
+---
+
+## What to Build Next
+
+**Ideas:**
+- Component variant switcher
+- Design token applier
+- Props editor
+- Style duplicator
+- A/B test generator
+- Screenshot annotator
+- Accessibility checker
+
+**Resources:**
+- [AST Explorer](https://astexplorer.net/) - Test AST transformations
+- [Babel Handbook](https://github.com/jamiebuilds/babel-handbook) - Learn AST manipulation
+- [Architecture Docs](./ARCHITECTURE.md) - How Brakit works
+- [Contributing](./CONTRIBUTING.md) - Contribute to Brakit
+
+---
+
+**Happy building! 🚀**

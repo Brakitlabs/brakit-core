@@ -16,6 +16,8 @@ import tokensRouter from "./routes/editor/tokens";
 import { deleteElement } from "./routes/delete/element";
 import historyRouter from "./routes/history";
 import { logger } from "./utils/logger";
+import { UpdateServicePluginRegistry } from "./services/shared/plugins";
+import { createPluginUpdateRouter } from "./routes/plugins/update";
 
 function validateConfiguration() {
   const validation = config.validateConfig();
@@ -40,7 +42,7 @@ function validateConfiguration() {
 validateConfiguration();
 
 const app = express();
-const proBundlePath = process.env.BRAKIT_PRO_BUNDLE_PATH;
+export const pluginRegistry = new UpdateServicePluginRegistry();
 
 app.use(bodyParser.json());
 
@@ -112,6 +114,7 @@ app.use("/api/update-font-family", updateFontFamilyRouter);
 app.use("/api/update-color", updateColorRouter);
 app.use("/api/delete-element", deleteElement);
 app.use("/api/history", historyRouter);
+app.use("/api/plugin/update", createPluginUpdateRouter(pluginRegistry));
 
 app.listen(config.server.port, config.server.host, () => {
   config.logConfig();

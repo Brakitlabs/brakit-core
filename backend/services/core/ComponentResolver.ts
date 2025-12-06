@@ -300,6 +300,9 @@ export class ComponentResolver {
     }
 
     const baseName = fileName.replace(/\.[^.]+$/, "");
-    return baseName === componentName;
+    return (
+      baseName === componentName ||
+      baseName.toLowerCase() === componentName.toLowerCase()
+    );
   }
 }
