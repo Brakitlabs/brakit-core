@@ -311,6 +311,9 @@ async function startProxy(options: ProxyOptions): Promise<void> {
 
         const overlayScripts = [
           `<script>\n    window.BRAKIT_BACKEND_URL = '${backendOrigin}';\n  </script>`,
+          process.env.BRAKIT_PRO_ORIGIN
+            ? `<script>\n    window.BRAKIT_PRO_SERVER_URL = '${process.env.BRAKIT_PRO_ORIGIN}';\n    window.BRAKIT_PRO_ORIGIN = '${process.env.BRAKIT_PRO_ORIGIN}';\n  </script>`
+            : "",
           `<script src="${backendOrigin}/brakit-overlay.js"></script>`,
           PluginInjector.buildScriptTags(plugins, backendOrigin),
         ];

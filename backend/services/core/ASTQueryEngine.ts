@@ -293,6 +293,31 @@ export class ASTQueryEngine {
             hasStaticText = true;
           }
 
+          if (!found && normalizedTarget.length > 0) {
+            const attrs: Array<JSXAttribute | JSXSpreadAttribute | null | undefined> =
+              node.openingElement?.attributes || [];
+
+            for (const attr of attrs) {
+              if (attr?.type !== "JSXAttribute") continue;
+              const attrName =
+                typeof attr.name?.name === "string" ? attr.name.name : undefined;
+              if (attrName !== "className") continue;
+
+              const literalValue = this.extractStringValue(attr.value as any);
+              if (!literalValue) continue;
+
+              const normalizedClass = normalizeText(literalValue);
+              if (
+                normalizedClass.includes(normalizedTarget) ||
+                literalValue.includes(text)
+              ) {
+                found = true;
+                hasStaticText = true;
+                break;
+              }
+            }
+          }
+
           if (!hasStaticText && hasDynamicContent && allowDynamicFallback) {
             found = true;
           }
