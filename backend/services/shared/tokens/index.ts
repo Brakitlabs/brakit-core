@@ -1,14 +1,17 @@
 import fs from "fs";
 import path from "path";
-import type { BrakitDesignTokens, ResolvedTokens } from "./types";
+import type { BrakitDesignTokens } from "./types";
 import { defaultDesignTokens } from "./defaults";
-import { TokenResolver } from "./resolver";
 import {
   TokenFileReadError,
   TokenParseError,
 } from "./errors";
-import { TokenCodeGenerator } from "./generators/TokenCodeGenerator";
+import { TokenCodeGenerator } from "./generators/tokenCodeGenerator";
 import { configureTsConfigPaths } from "./configureTsConfig";
+import {
+  TokenStructureBuilder,
+  type GeneratedTokens,
+} from "./generators/tokenStructureBuilder";
 
 /**
  * Token Service
@@ -16,17 +19,24 @@ import { configureTsConfigPaths } from "./configureTsConfig";
  */
 class TokenService {
   private tokens: BrakitDesignTokens;
-  private resolvedTokens: ResolvedTokens | null = null;
+  private generatedTokens: GeneratedTokens | null = null;
   private readonly tokensFilePath: string;
   private codeGenerator: TokenCodeGenerator;
 
   constructor() {
     this.tokensFilePath = this.getTokensFilePath();
     this.codeGenerator = new TokenCodeGenerator();
-    this.tokens = this.applyDefaults(
-      this.loadFromDisk() ?? defaultDesignTokens
-    );
-    
+
+    // Load tokens from disk if they exist, otherwise use defaults
+    const diskTokens = this.loadFromDisk();
+    if (diskTokens) {
+      // If tokens exist on disk, use them as-is (user has already configured them)
+      this.tokens = diskTokens;
+    } else {
+      // No saved tokens - use defaults (first run)
+      this.tokens = defaultDesignTokens;
+    }
+
     // Generate code on initialization (async, non-blocking)
     this.regenerateCode().catch((error) => {
       // eslint-disable-next-line no-console
@@ -42,13 +52,14 @@ class TokenService {
   }
 
   /**
-   * Get resolved tokens (Tailwind classes)
+   * Get generated tokens with { value, class, var } structure
+   * This is the unified token format used by both backend and frontend
    */
-  getResolvedTokens(): ResolvedTokens {
-    if (!this.resolvedTokens) {
-      this.resolvedTokens = TokenResolver.resolve(this.tokens);
+  getGeneratedTokens(): GeneratedTokens {
+    if (!this.generatedTokens) {
+      this.generatedTokens = TokenStructureBuilder.build(this.tokens);
     }
-    return this.resolvedTokens;
+    return this.generatedTokens;
   }
 
   /**
@@ -59,10 +70,10 @@ class TokenService {
   }
 
   /**
-   * Get resolved defaults without mutating current state
+   * Get generated tokens from defaults
    */
-  getDefaultResolvedTokens(): ResolvedTokens {
-    return TokenResolver.resolve(defaultDesignTokens);
+  getDefaultGeneratedTokens(): GeneratedTokens {
+    return TokenStructureBuilder.build(defaultDesignTokens);
   }
 
   /**
@@ -82,11 +93,14 @@ class TokenService {
 
   /**
    * Load/update tokens (for file persistence)
+   * @param tokens - The tokens to load
+   * @param options - Options for loading tokens
+   * @param options.skipDefaults - If true, use tokens as-is without merging with defaults (used for imports)
    */
-  loadTokens(tokens: BrakitDesignTokens): void {
-    this.tokens = this.applyDefaults(tokens);
-    this.resolvedTokens = null; // Invalidate cache
-    
+  loadTokens(tokens: BrakitDesignTokens, options?: { skipDefaults?: boolean }): void {
+    this.tokens = options?.skipDefaults ? tokens : this.applyDefaults(tokens);
+    this.generatedTokens = null; // Invalidate cache
+
     // Regenerate code files (async, non-blocking)
     this.regenerateCode().catch((error: unknown) => {
       // eslint-disable-next-line no-console
@@ -106,8 +120,8 @@ class TokenService {
    */
   resetToDefaults(): void {
     this.tokens = defaultDesignTokens;
-    this.resolvedTokens = null;
-    
+    this.generatedTokens = null;
+
     // Regenerate code files
     this.regenerateCode().catch((error: unknown) => {
       // eslint-disable-next-line no-console
@@ -121,9 +135,10 @@ class TokenService {
   refreshFromDisk(): void {
     const loaded = this.loadFromDisk();
     if (loaded) {
-      this.tokens = this.applyDefaults(loaded);
-      this.resolvedTokens = null;
-      
+      // Use tokens from disk as-is (they're already configured by the user)
+      this.tokens = loaded;
+      this.generatedTokens = null;
+
       // Regenerate code files
       this.regenerateCode().catch((error: unknown) => {
         // eslint-disable-next-line no-console
@@ -180,23 +195,40 @@ class TokenService {
     }
   }
 
+  /**
+   * Apply defaults to user tokens
+   *
+   * Dynamic Implementation:
+   * - Loops over ALL categories in defaultDesignTokens
+   * - Merges each category individually (user tokens override defaults)
+   * - No hardcoded category list
+   * - Works with unlimited extensibility
+   */
   private applyDefaults(tokens: BrakitDesignTokens): BrakitDesignTokens {
-    return {
-      ...defaultDesignTokens,
-      ...tokens,
-      color: { ...defaultDesignTokens.color, ...(tokens.color ?? {}) },
-      typography: {
-        ...defaultDesignTokens.typography,
-        ...(tokens.typography ?? {}),
-      },
-      spacing: { ...defaultDesignTokens.spacing, ...(tokens.spacing ?? {}) },
-      radius: { ...defaultDesignTokens.radius, ...(tokens.radius ?? {}) },
-      shadow: { ...defaultDesignTokens.shadow, ...(tokens.shadow ?? {}) },
-      layout: { ...defaultDesignTokens.layout, ...(tokens.layout ?? {}) },
-      border: { ...defaultDesignTokens.border, ...(tokens.border ?? {}) },
-      opacity: { ...defaultDesignTokens.opacity, ...(tokens.opacity ?? {}) },
-      zIndex: { ...defaultDesignTokens.zIndex, ...(tokens.zIndex ?? {}) },
-    };
+    const result: BrakitDesignTokens = { ...defaultDesignTokens, ...tokens };
+
+    // Loop over all default categories and merge with user tokens
+    for (const [category, defaultCategoryTokens] of Object.entries(defaultDesignTokens)) {
+      // Skip $schema and metadata
+      if (category.startsWith("$")) {
+        continue;
+      }
+
+      // Skip if not an object
+      if (!defaultCategoryTokens || typeof defaultCategoryTokens !== "object") {
+        continue;
+      }
+
+      // Merge default category tokens with user tokens
+      // User tokens take precedence over defaults
+      const userCategoryTokens = (tokens as any)[category];
+      result[category as keyof BrakitDesignTokens] = {
+        ...defaultCategoryTokens,
+        ...(userCategoryTokens && typeof userCategoryTokens === "object" ? userCategoryTokens : {}),
+      } as never;
+    }
+
+    return result;
   }
 }
 
@@ -204,4 +236,4 @@ class TokenService {
 const tokenService = new TokenService();
 
 export { tokenService, TokenService };
-export type { BrakitDesignTokens, ResolvedTokens };
+export type { BrakitDesignTokens, GeneratedTokens };

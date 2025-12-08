@@ -13,12 +13,12 @@ const router = Router();
 router.get("/defaults", (_req: Request, res: Response) => {
   try {
     const tokens = tokenService.getDefaultTokens();
-    const resolved = tokenService.getDefaultResolvedTokens();
+    const generated = tokenService.getDefaultGeneratedTokens();
 
     res.json({
       success: true,
       tokens,
-      resolved,
+      resolved: generated, // Frontend expects 'resolved'
     });
   } catch (error) {
     logger.error({
@@ -38,12 +38,12 @@ router.get("/", (_req: Request, res: Response) => {
     // Always reload from disk so manual edits are picked up
     tokenService.refreshFromDisk();
     const tokens = tokenService.getRawTokens();
-    const resolved = tokenService.getResolvedTokens();
+    const generated = tokenService.getGeneratedTokens();
 
     res.json({
       success: true,
       tokens,
-      resolved,
+      resolved: generated, // Frontend expects 'resolved'
     });
   } catch (error) {
     logger.error({
@@ -107,13 +107,13 @@ router.post("/", async (req: Request, res: Response) => {
     tokenService.loadTokens(validatedTokens as any as BrakitDesignTokens);
 
     // Return updated tokens
-    const resolved = tokenService.getResolvedTokens();
+    const generated = tokenService.getGeneratedTokens();
 
     res.json({
       success: true,
       message: "Design tokens saved successfully",
       tokens: validatedTokens,
-      resolved,
+      resolved: generated, // Frontend expects 'resolved'
     });
   } catch (error) {
     logger.error({

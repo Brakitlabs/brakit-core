@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
-import type { ResolvedTokens } from "./tokens";
+import type { GeneratedTokens } from "./tokens";
 import { tokenService } from "./tokens";
 
 export type FormFieldType =
@@ -199,7 +199,7 @@ export function generateFormCode(
   spec: FormSpec,
   identifiers: IdentifierOptions
 ): GeneratedFormCode {
-  const tokens = tokenService.getResolvedTokens();
+  const tokens = tokenService.getGeneratedTokens();
   const schemaDeclaration = buildSchema(spec, identifiers.schemaName);
   const setupCode = buildSetup(spec, identifiers);
   const formJsx = buildFormJsx(spec, identifiers, tokens);
@@ -302,7 +302,7 @@ function ${identifiers.submitHandlerName}(values: z.infer<typeof ${identifiers.s
 function buildFormJsx(
   spec: FormSpec,
   identifiers: IdentifierOptions,
-  tokens: ResolvedTokens
+  tokens: GeneratedTokens
 ): string {
   const c = tokens.color;
   const t = tokens.typography;
@@ -314,12 +314,12 @@ function buildFormJsx(
     .join("\n\n");
 
   const description = spec.description
-    ? `<p className="${t["body-sm"]} ${c["text-muted"]}">${spec.description}</p>`
+    ? `<p className="${t["body-sm"]?.class} ${c["text-muted"]?.class}">${spec.description}</p>`
     : "";
 
-  return `<div className="flex h-full w-full flex-col overflow-auto ${r.default} border ${c["border-subtle"]} ${c.surface} ${sh.default} ${s["space-lg"]} ${c["text-main"]}">
+  return `<div className="flex h-full w-full flex-col overflow-auto ${r.default?.class} border ${c["border-subtle"]?.class} ${c.surface?.class} ${sh.default?.class} ${s["space-lg"]?.class} ${c["text-main"]?.class}">
   <div className="space-y-1">
-    <h3 className="${t.h2} ${c["text-main"]}">${spec.title}</h3>
+    <h3 className="${t.h2?.class} ${c["text-main"]?.class}">${spec.title}</h3>
     ${description}
   </div>
   <Form {...${identifiers.formVarName}}>
@@ -327,7 +327,7 @@ function buildFormJsx(
       <div className="flex-1 space-y-4 overflow-auto">
 ${indent(fieldBlocks, 8)}
       </div>
-      <Button type="submit" className="w-full ${r.default} ${c.primary} ${t["body-sm"]} font-semibold text-white ${sh.default} transition hover:-translate-y-0.5 hover:${sh.default}">
+      <Button type="submit" className="w-full ${r.default?.class} ${c.primary?.class} ${t["body-sm"]?.class} font-semibold text-white ${sh.default?.class} transition hover:-translate-y-0.5 hover:${sh.default?.class}">
         ${spec.submitLabel}
       </Button>
     </form>
@@ -338,7 +338,7 @@ ${indent(fieldBlocks, 8)}
 function buildFieldBlock(
   field: FormFieldSpec,
   formVarName: string,
-  tokens: ResolvedTokens
+  tokens: GeneratedTokens
 ): string {
   const c = tokens.color;
   const t = tokens.typography;
@@ -348,26 +348,26 @@ function buildFieldBlock(
 
   if (field.type === "checkbox") {
     const description = field.description
-      ? `<FormDescription className="${t["body-sm"]} ${c["text-muted"]}">${field.description}</FormDescription>`
+      ? `<FormDescription className="${t["body-sm"]?.class} ${c["text-muted"]?.class}">${field.description}</FormDescription>`
       : "";
 
     return `<FormField
   control={${nameAccessor}}
   name="${field.name}"
   render={({ field }) => (
-    <FormItem className="flex flex-row items-start gap-3 rounded-md border ${c["border-subtle"]} ${c["surface-alt"]} ${s["space-sm"]}">
+    <FormItem className="flex flex-row items-start gap-3 rounded-md border ${c["border-subtle"]?.class} ${c["surface-alt"]?.class} ${s["space-sm"]?.class}">
       <FormControl>
         <Checkbox
           checked={Boolean(field.value)}
           onCheckedChange={(checked) => field.onChange(checked === true)}
-          className="border ${c["border-subtle"]} ${c.surface} ${r.default}"
+          className="border ${c["border-subtle"]?.class} ${c.surface?.class} ${r.default?.class}"
         />
       </FormControl>
       <div className="space-y-1 leading-none">
-        <FormLabel className="${t["body-sm"]} ${c["text-main"]}">${field.label}</FormLabel>
+        <FormLabel className="${t["body-sm"]?.class} ${c["text-main"]?.class}">${field.label}</FormLabel>
         ${description}
       </div>
-      <FormMessage className="${t["body-sm"]}" />
+      <FormMessage className="${t["body-sm"]?.class}" />
     </FormItem>
   )}
 />`;
@@ -375,11 +375,11 @@ function buildFieldBlock(
 
   const controlElement =
     field.type === "textarea"
-      ? `<Textarea className="${r.default} border ${c["border-subtle"]} ${c.surface} ${c["text-main"]} ${t.body}" placeholder="${field.placeholder ?? ""}" {...field} />`
-      : `<Input className="${r.default} border ${c["border-subtle"]} ${c.surface} ${c["text-main"]} ${t.body}" type="${mapFieldTypeToInput(field.type)}" placeholder="${field.placeholder ?? ""}" {...field} />`;
+      ? `<Textarea className="${r.default?.class} border ${c["border-subtle"]?.class} ${c.surface?.class} ${c["text-main"]?.class} ${t.body?.class}" placeholder="${field.placeholder ?? ""}" {...field} />`
+      : `<Input className="${r.default?.class} border ${c["border-subtle"]?.class} ${c.surface?.class} ${c["text-main"]?.class} ${t.body?.class}" type="${mapFieldTypeToInput(field.type)}" placeholder="${field.placeholder ?? ""}" {...field} />`;
 
   const description = field.description
-    ? `<FormDescription className="${t["body-sm"]} ${c["text-muted"]}">${field.description}</FormDescription>`
+    ? `<FormDescription className="${t["body-sm"]?.class} ${c["text-muted"]?.class}">${field.description}</FormDescription>`
     : "";
 
   return `<FormField
@@ -387,12 +387,12 @@ function buildFieldBlock(
   name="${field.name}"
   render={({ field }) => (
     <FormItem>
-      <FormLabel className="${t["body-sm"]} ${c["text-main"]}">${field.label}</FormLabel>
+      <FormLabel className="${t["body-sm"]?.class} ${c["text-main"]?.class}">${field.label}</FormLabel>
       <FormControl>
         ${controlElement}
       </FormControl>
       ${description}
-      <FormMessage className="${t["body-sm"]}" />
+      <FormMessage className="${t["body-sm"]?.class}" />
     </FormItem>
   )}
 />`;

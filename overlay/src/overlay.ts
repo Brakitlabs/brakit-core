@@ -164,7 +164,7 @@ class BrakitOverlayApp {
       try {
         const response = await this.backend.getDefaultDesignTokens();
         this.tokenManager.setTokens(response);
-        
+
         // Update panel with resolved tokens
         if (this.designTokensPanel) {
           this.designTokensPanel.setTokens(
@@ -172,10 +172,37 @@ class BrakitOverlayApp {
             response.resolved
           );
         }
-        
+
         logger.info("Design tokens reset to defaults successfully");
       } catch (error) {
         logger.error("Failed to reset design tokens", error);
+      }
+    });
+
+    document.addEventListener("brakit:import-tokens", async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { tokens, source } = customEvent.detail;
+
+      try {
+        logger.info("Importing design tokens", { source });
+        const response = await this.backend.importTokens(tokens, source);
+        this.tokenManager.setImportedTokens(response);
+
+        // Update panel with resolved tokens
+        if (this.designTokensPanel) {
+          this.designTokensPanel.setTokens(
+            response.tokens,
+            response.resolved
+          );
+        }
+
+        logger.info("Design tokens imported successfully", {
+          tokensImported: response.tokensImported,
+          mappings: response.mappings.length,
+        });
+      } catch (error) {
+        logger.error("Failed to import design tokens", error);
+        // TODO: Show error to user
       }
     });
   }

@@ -1,9 +1,11 @@
 import type { LayoutId, TemplateContext } from "../types";
 import { generateFormCode, getFormSpec } from "../../services/shared/formSpecs";
 import { tokenService } from "../../services/shared/tokens";
+import { createTokenProxy } from "../../services/shared/tokens/tokenHelper";
 
 // Helper to get fresh tokens per render (so edits are reflected)
-const getTokens = () => tokenService.getResolvedTokens();
+// Uses proxy to provide smart fallbacks for missing tokens
+const getTokens = () => createTokenProxy(tokenService.getGeneratedTokens());
 
 export interface TailwindLayout {
   body: string;
@@ -47,7 +49,7 @@ function blankLayout(ctx: TemplateContext): TailwindLayout {
     body: `
 <main
   data-brakit-canvas-root="canvas"
-  className="relative min-h-screen ${tokens.color["surface-alt"]}"
+  className="relative min-h-screen ${tokens.color["surface-alt"].class}"
 >
 </main>
 `.trim(),
@@ -66,84 +68,84 @@ function heroLayout(ctx: TemplateContext): TailwindLayout {
 
   return {
     body: `
-<main data-brakit-canvas-root="canvas" className="relative min-h-screen ${tokens.color["surface-alt"]}">
-  <header data-section="header" className="${tokens.layout.content} ${tokens.spacing["section-x"]} ${tokens.spacing["section-y"]} text-center">
-    <p className="${tokens.typography.label} ${tokens.color["text-muted"]}">
+<main data-brakit-canvas-root="canvas" className="relative min-h-screen ${tokens.color["surface-alt"].class}">
+  <header data-section="header" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} ${tokens.spacing["section-y"].class} text-center">
+    <p className="${tokens.typography.label.class} ${tokens.color["text-muted"].class}">
       Launch update
     </p>
-    <h1 className="mt-4 ${tokens.typography.h1} ${tokens.color["text-main"]} sm:text-5xl">${pageTitle}</h1>
-    <p className="mt-4 text-lg ${tokens.color["text-muted"]}">
+    <h1 className="mt-4 ${tokens.typography.h1.class} ${tokens.color["text-main"].class} sm:text-5xl">${pageTitle}</h1>
+    <p className="mt-4 text-lg ${tokens.color["text-muted"].class}">
       Introduce a new product line, feature, or campaign with plenty of room for supporting copy.
     </p>
   </header>
 
-  <section data-section="hero" className="${tokens.layout.content} ${tokens.spacing["section-x"]} grid ${tokens.spacing["space-lg"]} pb-12 lg:grid-cols-[2fr_1fr]">
-    <div className="space-y-6 ${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.spacing["space-lg"]} ${tokens.shadow.default}">
-      <h2 className="${tokens.typography.h2} ${tokens.color["text-main"]}">Lead with clarity</h2>
-      <p className="${tokens.color["text-muted"]}">
+  <section data-section="hero" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} grid ${tokens.spacing["space-lg"].class} pb-12 lg:grid-cols-[2fr_1fr]">
+    <div className="space-y-6 ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.spacing["space-lg"].class} ${tokens.shadow.default.class}">
+      <h2 className="${tokens.typography.h2.class} ${tokens.color["text-main"].class}">Lead with clarity</h2>
+      <p className="${tokens.color["text-muted"].class}">
         Pin the key narrative here. Swap this copy for onboarding checklists, product visuals, or customer wins.
       </p>
-      <ul className="space-y-3 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+      <ul className="space-y-3 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
         <li className="flex items-start gap-3">
-          <span className="mt-1 h-2 w-2 rounded-full ${tokens.color["text-main"]}"></span>
+          <span className="mt-1 h-2 w-2 rounded-full ${tokens.color["text-main"].class}"></span>
           Pair strong messaging with a supporting feature grid or testimonial rail.
         </li>
         <li className="flex items-start gap-3">
-          <span className="mt-1 h-2 w-2 rounded-full ${tokens.color["text-main"]}"></span>
+          <span className="mt-1 h-2 w-2 rounded-full ${tokens.color["text-main"].class}"></span>
           Add imagery, charts, or embeds directly inside this section.
         </li>
         <li className="flex items-start gap-3">
-          <span className="mt-1 h-2 w-2 rounded-full ${tokens.color["text-main"]}"></span>
+          <span className="mt-1 h-2 w-2 rounded-full ${tokens.color["text-main"].class}"></span>
           Keep your CTA above the fold for faster conversions.
         </li>
       </ul>
     </div>
     <div className="space-y-4">
-      <div className="${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.shadow.default} p-6">
-        <p className="${tokens.typography.label} ${tokens.color["text-muted"]}">
+      <div className="${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.shadow.default.class} p-6">
+        <p className="${tokens.typography.label.class} ${tokens.color["text-muted"].class}">
           Feature grid
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           ${highlightStats
             .map(
               (stat) => `
-          <div className="rounded-2xl border ${tokens.color["border-subtle"]} ${tokens.color.surface} p-4">
-            <p className="${tokens.typography.h2}">${stat.value}</p>
-            <p className="${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">${stat.label}</p>
+          <div className="rounded-2xl border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} p-4">
+            <p className="${tokens.typography.h2.class}">${stat.value}</p>
+            <p className="${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">${stat.label}</p>
           </div>`
             )
             .join("")}
         </div>
       </div>
-      <div className="${tokens.radius.default} border border-dashed ${tokens.color["border-subtle"]} ${tokens.color.surface} p-6 ${tokens.shadow.default}">
-        <h3 className="text-base font-semibold ${tokens.color["text-main"]}">Secondary story</h3>
-        <p className="mt-2 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+      <div className="${tokens.radius.default.class} border border-dashed ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} p-6 ${tokens.shadow.default.class}">
+        <h3 className="text-base font-semibold ${tokens.color["text-main"].class}">Secondary story</h3>
+        <p className="mt-2 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
           Link to patch notes, documentation, or another supporting section.
         </p>
       </div>
     </div>
   </section>
 
-  <section data-section="cta" className="${tokens.layout.content} ${tokens.spacing["section-x"]} pb-12">
-    <div className="flex flex-col gap-4 ${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.spacing["space-lg"]} ${tokens.shadow.default} sm:flex-row sm:items-center sm:justify-between">
+  <section data-section="cta" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} pb-12">
+    <div className="flex flex-col gap-4 ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.spacing["space-lg"].class} ${tokens.shadow.default.class} sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h3 className="text-xl font-semibold">Ship with confidence</h3>
-        <p className="${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+        <p className="${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
           Keep your hero CTA tight, with a supporting secondary action.
         </p>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row">
-        <a className="inline-flex items-center justify-center ${tokens.radius.default} ${tokens.color.primary} px-6 py-3 ${tokens.typography["body-sm"]} font-semibold ${tokens.shadow.default} transition hover:-translate-y-0.5 hover:${tokens.shadow.hover}" href="#">
+        <a className="inline-flex items-center justify-center ${tokens.radius.default.class} ${tokens.color.primary.class} px-6 py-3 ${tokens.typography["body-sm"].class} font-semibold ${tokens.shadow.default.class} transition hover:-translate-y-0.5 hover:${tokens.shadow.hover.class}" href="#">
           Get started
         </a>
-        <a className="inline-flex items-center justify-center ${tokens.radius.default} border ${tokens.color["border-subtle"]} px-6 py-3 ${tokens.typography["body-sm"]} font-semibold ${tokens.color["text-main"]} transition hover:${tokens.color["border-subtle"]} hover:${tokens.color["surface-alt"]}" href="#">
+        <a className="inline-flex items-center justify-center ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} px-6 py-3 ${tokens.typography["body-sm"].class} font-semibold ${tokens.color["text-main"].class} transition hover:${tokens.color["border-subtle"].class} hover:${tokens.color["surface-alt"].class}" href="#">
           View docs
         </a>
       </div>
     </div>
   </section>
 
-  <footer data-section="footer" className="${tokens.layout.content} ${tokens.spacing["section-x"]} border-t ${tokens.color["border-subtle"]} py-10 text-center ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+  <footer data-section="footer" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} border-t ${tokens.color["border-subtle"].class} py-10 text-center ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
     Built with Tailwind + Brakit
   </footer>
 </main>
@@ -158,86 +160,86 @@ function twoColumnLayout(ctx: TemplateContext): TailwindLayout {
 
   return {
     body: `
-<main data-brakit-canvas-root="canvas" className="relative min-h-screen ${tokens.color["surface-alt"]}">
-  <header data-section="header" className="${tokens.layout.content} ${tokens.spacing["section-x"]} ${tokens.spacing["section-y"]}">
-    <p className="${tokens.typography.label} ${tokens.color["text-muted"]}">
+<main data-brakit-canvas-root="canvas" className="relative min-h-screen ${tokens.color["surface-alt"].class}">
+  <header data-section="header" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} ${tokens.spacing["section-y"].class}">
+    <p className="${tokens.typography.label.class} ${tokens.color["text-muted"].class}">
       Two column layout
     </p>
-    <h1 className="mt-4 ${tokens.typography.h1} ${tokens.color["text-main"]}">${pageTitle}</h1>
-    <p className="mt-4 ${tokens.typography.body} ${tokens.color["text-muted"]}">
+    <h1 className="mt-4 ${tokens.typography.h1.class} ${tokens.color["text-main"].class}">${pageTitle}</h1>
+    <p className="mt-4 ${tokens.typography.body.class} ${tokens.color["text-muted"].class}">
       Tell a story on the left while keeping supporting actions and summaries on the right.
     </p>
   </header>
 
-  <section data-section="split" className="${tokens.layout.content} ${tokens.spacing["section-x"]} grid ${tokens.spacing["space-lg"]} pb-12 lg:grid-cols-[2fr_1fr]">
-    <article className="space-y-8 ${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.spacing["space-lg"]} ${tokens.shadow.default}">
-      <h2 className="${tokens.typography.h2} ${tokens.color["text-main"]}">Primary content</h2>
-      <p className="${tokens.typography.body} ${tokens.color["text-muted"]}">
+  <section data-section="split" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} grid ${tokens.spacing["space-lg"].class} pb-12 lg:grid-cols-[2fr_1fr]">
+    <article className="space-y-8 ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.spacing["space-lg"].class} ${tokens.shadow.default.class}">
+      <h2 className="${tokens.typography.h2.class} ${tokens.color["text-main"].class}">Primary content</h2>
+      <p className="${tokens.typography.body.class} ${tokens.color["text-muted"].class}">
         Swap this block for long-form copy, product updates, or educational content. Drop in media, tables, or feature callouts.
       </p>
-      <div className="grid gap-6 ${tokens.radius.default} border border-dashed ${tokens.color["border-subtle"]} ${tokens.color["primary-soft"]} p-6 sm:grid-cols-2">
+      <div className="grid gap-6 ${tokens.radius.default.class} border border-dashed ${tokens.color["border-subtle"].class} ${tokens.color["primary-soft"].class} p-6 sm:grid-cols-2">
         <div>
-          <h3 className="${tokens.typography.h3} ${tokens.color["text-main"]}">Use cases</h3>
-          <p className="mt-2 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+          <h3 className="${tokens.typography.h3.class} ${tokens.color["text-main"].class}">Use cases</h3>
+          <p className="mt-2 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
             Perfect for launch notes, changelog entries, or customer success stories.
           </p>
         </div>
         <div>
-          <h3 className="${tokens.typography.h3} ${tokens.color["text-main"]}">Drop-ins</h3>
-          <p className="mt-2 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+          <h3 className="${tokens.typography.h3.class} ${tokens.color["text-main"].class}">Drop-ins</h3>
+          <p className="mt-2 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
             Embed charts, quotes, or code blocks—spacing is already tuned for readability.
           </p>
         </div>
       </div>
     </article>
     <aside className="space-y-6">
-      <div className="${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.spacing["space-lg"]} ${tokens.shadow.default}">
-        <h3 className="${tokens.typography.label} ${tokens.color["text-muted"]}">
+      <div className="${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.spacing["space-lg"].class} ${tokens.shadow.default.class}">
+        <h3 className="${tokens.typography.label.class} ${tokens.color["text-muted"].class}">
           Sidebar
         </h3>
-        <p className="mt-3 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+        <p className="mt-3 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
           Pair summaries, quick actions, or related resources with the main narrative.
         </p>
         <div className="mt-5 grid gap-3">
           ${quickLinks
             .map(
               (link) => `
-          <a className="${tokens.radius.default} border ${tokens.color["border-subtle"]} px-4 py-3 ${tokens.typography["body-sm"]} font-semibold ${tokens.color["text-main"]} transition hover:-translate-y-0.5 hover:${tokens.shadow.hover}" href="#">
+          <a className="${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} px-4 py-3 ${tokens.typography["body-sm"].class} font-semibold ${tokens.color["text-main"].class} transition hover:-translate-y-0.5 hover:${tokens.shadow.hover.class}" href="#">
             ${link}
           </a>`
             )
             .join("")}
         </div>
       </div>
-      <div className="${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color["primary-soft"]} ${tokens.spacing["space-lg"]}">
-        <h4 className="${tokens.typography.h3} ${tokens.color["text-main"]}">Sticky ideas</h4>
-        <p className="mt-2 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+      <div className="${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color["primary-soft"].class} ${tokens.spacing["space-lg"].class}">
+        <h4 className="${tokens.typography.h3.class} ${tokens.color["text-main"].class}">Sticky ideas</h4>
+        <p className="mt-2 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
           Replace this with a contact module, newsletter signup, or anchor navigation.
         </p>
       </div>
     </aside>
   </section>
 
-  <section data-section="cta" className="${tokens.layout.content} ${tokens.spacing["section-x"]} pb-12">
-    <div className="flex flex-col gap-4 ${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.spacing["space-lg"]} ${tokens.shadow.default} lg:flex-row lg:items-center lg:justify-between">
+  <section data-section="cta" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} pb-12">
+    <div className="flex flex-col gap-4 ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.spacing["space-lg"].class} ${tokens.shadow.default.class} lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <h3 className="${tokens.typography.h2} ${tokens.color["text-main"]}">Ready for a CTA?</h3>
-        <p className="${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+        <h3 className="${tokens.typography.h2.class} ${tokens.color["text-main"].class}">Ready for a CTA?</h3>
+        <p className="${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
           Use this row for bottom-of-page actions or links to documentation.
         </p>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row">
-        <a className="inline-flex items-center justify-center ${tokens.radius.default} ${tokens.color.primary} px-5 py-3 ${tokens.typography["body-sm"]} font-semibold text-white ${tokens.shadow.default} transition hover:-translate-y-0.5 hover:${tokens.shadow.hover}" href="#">
+        <a className="inline-flex items-center justify-center ${tokens.radius.default.class} ${tokens.color.primary.class} px-5 py-3 ${tokens.typography["body-sm"].class} font-semibold text-white ${tokens.shadow.default.class} transition hover:-translate-y-0.5 hover:${tokens.shadow.hover.class}" href="#">
           Primary action
         </a>
-        <a className="inline-flex items-center justify-center ${tokens.radius.default} border ${tokens.color["border-subtle"]} px-5 py-3 ${tokens.typography["body-sm"]} font-semibold ${tokens.color["text-main"]} transition hover:${tokens.color["surface-alt"]}" href="#">
+        <a className="inline-flex items-center justify-center ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} px-5 py-3 ${tokens.typography["body-sm"].class} font-semibold ${tokens.color["text-main"].class} transition hover:${tokens.color["surface-alt"].class}" href="#">
           Secondary
         </a>
       </div>
     </div>
   </section>
 
-  <footer data-section="footer" className="border-t ${tokens.color["border-subtle"]} ${tokens.spacing["section-x"]} py-10 text-center ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+  <footer data-section="footer" className="border-t ${tokens.color["border-subtle"].class} ${tokens.spacing["section-x"].class} py-10 text-center ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
     Footer content or legal copy lives here.
   </footer>
 </main>
@@ -256,58 +258,58 @@ function contentSplitLayout(ctx: TemplateContext): TailwindLayout {
 
   return {
     body: `
-<main data-brakit-canvas-root="canvas" className="relative min-h-screen ${tokens.color["surface-alt"]}">
-  <header data-section="header" className="${tokens.layout.content} ${tokens.spacing["section-x"]} ${tokens.spacing["section-y"]} text-center">
-    <p className="${tokens.typography.label} ${tokens.color["text-muted"]}">
+<main data-brakit-canvas-root="canvas" className="relative min-h-screen ${tokens.color["surface-alt"].class}">
+  <header data-section="header" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} ${tokens.spacing["section-y"].class} text-center">
+    <p className="${tokens.typography.label.class} ${tokens.color["text-muted"].class}">
       Split content
     </p>
-    <h1 className="mt-4 ${tokens.typography.h1} ${tokens.color["text-main"]} sm:text-5xl">${pageTitle}</h1>
-    <p className="mt-4 ${tokens.typography.body} ${tokens.color["text-muted"]}">
+    <h1 className="mt-4 ${tokens.typography.h1.class} ${tokens.color["text-main"].class} sm:text-5xl">${pageTitle}</h1>
+    <p className="mt-4 ${tokens.typography.body.class} ${tokens.color["text-muted"].class}">
       Compare two ideas, show dual messaging, or pair copy with imagery side by side.
     </p>
   </header>
 
-  <section data-section="contentSplit" className="${tokens.layout.content} ${tokens.spacing["section-x"]} grid ${tokens.spacing["space-lg"]} pb-12 lg:grid-cols-2">
-    <article className="space-y-6 ${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.spacing["space-lg"]} ${tokens.shadow.default}">
-      <h2 className="${tokens.typography.h2} ${tokens.color["text-main"]}">Left column</h2>
-      <p className="${tokens.typography.body} ${tokens.color["text-muted"]}">
+  <section data-section="contentSplit" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} grid ${tokens.spacing["space-lg"].class} pb-12 lg:grid-cols-2">
+    <article className="space-y-6 ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.spacing["space-lg"].class} ${tokens.shadow.default.class}">
+      <h2 className="${tokens.typography.h2.class} ${tokens.color["text-main"].class}">Left column</h2>
+      <p className="${tokens.typography.body.class} ${tokens.color["text-muted"].class}">
         Replace with feature descriptions, product pillars, or long-form copy. The card grid is perfect for highlights.
       </p>
-      <div className="grid ${tokens.spacing["space-lg"]} md:grid-cols-2">
-        <div className="rounded-2xl border ${tokens.color["border-subtle"]} ${tokens.color["primary-soft"]} p-5">
-          <h3 className="${tokens.typography.label} ${tokens.color["text-muted"]}">
+      <div className="grid ${tokens.spacing["space-lg"].class} md:grid-cols-2">
+        <div className="rounded-2xl border ${tokens.color["border-subtle"].class} ${tokens.color["primary-soft"].class} p-5">
+          <h3 className="${tokens.typography.label.class} ${tokens.color["text-muted"].class}">
             Highlight
           </h3>
-          <p className="mt-2 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+          <p className="mt-2 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
             Call out wins, product differentiators, or upcoming milestones.
           </p>
         </div>
-        <div className="rounded-2xl border ${tokens.color["border-subtle"]} ${tokens.color["primary-soft"]} p-5">
-          <h3 className="${tokens.typography.label} ${tokens.color["text-muted"]}">
+        <div className="rounded-2xl border ${tokens.color["border-subtle"].class} ${tokens.color["primary-soft"].class} p-5">
+          <h3 className="${tokens.typography.label.class} ${tokens.color["text-muted"].class}">
             Tip
           </h3>
-          <p className="mt-2 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+          <p className="mt-2 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
             Swap for metrics, testimonials, or embedded media.
           </p>
         </div>
       </div>
     </article>
-    <article className="space-y-6 ${tokens.radius.default} border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.spacing["space-lg"]} ${tokens.shadow.default}">
-      <h2 className="${tokens.typography.h2} ${tokens.color["text-main"]}">Right column</h2>
-      <p className="${tokens.typography.body} ${tokens.color["text-muted"]}">
+    <article className="space-y-6 ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.spacing["space-lg"].class} ${tokens.shadow.default.class}">
+      <h2 className="${tokens.typography.h2.class} ${tokens.color["text-main"].class}">Right column</h2>
+      <p className="${tokens.typography.body.class} ${tokens.color["text-muted"].class}">
         Ideal for timelines, how-to steps, or supporting visuals. Keep each step tight for fast scanning.
       </p>
       <div className="space-y-4">
         ${steps
           .map(
             (copy, index) => `
-        <div className="flex items-start ${tokens.spacing["space-lg"]} rounded-2xl border ${tokens.color["border-subtle"]} ${tokens.color["primary-soft"]} p-5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full ${tokens.color.surface} text-sm font-semibold ${tokens.color["text-main"]} ${tokens.shadow.default}">
+        <div className="flex items-start ${tokens.spacing["space-lg"].class} rounded-2xl border ${tokens.color["border-subtle"].class} ${tokens.color["primary-soft"].class} p-5">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full ${tokens.color.surface.class} text-sm font-semibold ${tokens.color["text-main"].class} ${tokens.shadow.default.class}">
             0${index + 1}
           </span>
           <div>
-            <h3 className="${tokens.typography.h3} ${tokens.color["text-main"]}">Step ${index + 1}</h3>
-            <p className="mt-1 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+            <h3 className="${tokens.typography.h3.class} ${tokens.color["text-main"].class}">Step ${index + 1}</h3>
+            <p className="mt-1 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
               ${copy}
             </p>
           </div>
@@ -318,27 +320,27 @@ function contentSplitLayout(ctx: TemplateContext): TailwindLayout {
     </article>
   </section>
 
-  <section data-section="cta" className="${tokens.layout.content} ${tokens.spacing["section-x"]} pb-12">
-    <div className="rounded-3xl border ${tokens.color["border-subtle"]} ${tokens.color.surface} ${tokens.spacing["space-lg"]} text-center ${tokens.shadow.default}">
-      <p className="${tokens.typography.label} ${tokens.color["text-muted"]}">
+  <section data-section="cta" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} pb-12">
+    <div className="rounded-3xl border ${tokens.color["border-subtle"].class} ${tokens.color.surface.class} ${tokens.spacing["space-lg"].class} text-center ${tokens.shadow.default.class}">
+      <p className="${tokens.typography.label.class} ${tokens.color["text-muted"].class}">
         CTA
       </p>
-      <h3 className="mt-2 ${tokens.typography.h2} ${tokens.color["text-main"]}">Add a final action</h3>
-      <p className="mt-2 ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+      <h3 className="mt-2 ${tokens.typography.h2.class} ${tokens.color["text-main"].class}">Add a final action</h3>
+      <p className="mt-2 ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
         Use this row for downloads, demos, or contact modules once readers finish the split content.
       </p>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-        <a className="inline-flex items-center justify-center ${tokens.radius.default} ${tokens.color.primary} px-5 py-3 ${tokens.typography["body-sm"]} font-semibold text-white ${tokens.shadow.default} transition hover:-translate-y-0.5 hover:${tokens.shadow.hover}" href="#">
+        <a className="inline-flex items-center justify-center ${tokens.radius.default.class} ${tokens.color.primary.class} px-5 py-3 ${tokens.typography["body-sm"].class} font-semibold text-white ${tokens.shadow.default.class} transition hover:-translate-y-0.5 hover:${tokens.shadow.hover.class}" href="#">
           Talk to sales
         </a>
-        <a className="inline-flex items-center justify-center ${tokens.radius.default} border ${tokens.color["border-subtle"]} px-5 py-3 ${tokens.typography["body-sm"]} font-semibold ${tokens.color["text-main"]} transition hover:${tokens.color["surface-alt"]}" href="#">
+        <a className="inline-flex items-center justify-center ${tokens.radius.default.class} border ${tokens.color["border-subtle"].class} px-5 py-3 ${tokens.typography["body-sm"].class} font-semibold ${tokens.color["text-main"].class} transition hover:${tokens.color["surface-alt"].class}" href="#">
           Explore docs
         </a>
       </div>
     </div>
   </section>
 
-  <footer data-section="footer" className="${tokens.layout.content} ${tokens.spacing["section-x"]} border-t ${tokens.color["border-subtle"]} py-10 text-center ${tokens.typography["body-sm"]} ${tokens.color["text-muted"]}">
+  <footer data-section="footer" className="${tokens.layout.content.class} ${tokens.spacing["section-x"].class} border-t ${tokens.color["border-subtle"].class} py-10 text-center ${tokens.typography["body-sm"].class} ${tokens.color["text-muted"].class}">
     Footer content or legal copy lives here.
   </footer>
 </main>
@@ -356,8 +358,12 @@ function dashboardLayout(ctx: TemplateContext): TailwindLayout {
   const sh = tokens.shadow;
   const l = tokens.layout;
   const raw = tokenService.getRawTokens();
-  const textColor = (key: keyof typeof raw.color) =>
-    `text-[${raw.color[key].$value.replace(/\s+/g, "_")}]`;
+  const textColor = (key: string) => {
+    const colorTokens = raw.color;
+    if (!colorTokens || typeof colorTokens === "string") return "";
+    const token = colorTokens[key];
+    return token ? `text-[${(token.$value as string).replace(/\s+/g, "_")}]` : "";
+  };
   const metrics = [
     {
       label: "Active users",

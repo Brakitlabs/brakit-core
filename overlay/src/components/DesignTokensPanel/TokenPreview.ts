@@ -1,4 +1,9 @@
-  import { PreviewGenerator } from "./preview/PreviewGenerator";
+/**
+ * TokenPreview - Manages preview iframe updates
+ * Simple: Always shows live preview of current tokens
+ */
+
+import { PreviewGenerator } from "./preview/PreviewGenerator";
 
 export class TokenPreview {
   private iframe: HTMLIFrameElement | null = null;
@@ -25,7 +30,9 @@ export class TokenPreview {
   update(tokens: any) {
     if (!this.iframe || !this.iframe.contentDocument) return;
 
+    // Always generate live preview with current tokens
     const html = PreviewGenerator.generate(tokens);
+
     const doc = this.iframe.contentDocument;
     doc.open();
     doc.write(html);
