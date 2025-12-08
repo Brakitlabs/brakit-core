@@ -9,13 +9,28 @@ export type TokenType =
   | "typography"
   | "fontWeight"
   | "number"
-  | "shadow";
+  | "shadow"
+  | "duration"
+  | "gradient"
+  | string; // Allow custom types
 
 export interface BaseToken<T = unknown> {
   $type: TokenType;
   $value: T;
   $description?: string;
 }
+
+/**
+ * Generic token that can represent any W3C token type
+ * Used for dynamic token categories
+ */
+export type Token =
+  | ColorToken
+  | DimensionToken
+  | TypographyToken
+  | NumberToken
+  | ShadowToken
+  | BaseToken;
 
 export interface ColorToken extends BaseToken<string> {
   $type: "color";
@@ -45,8 +60,6 @@ export interface NumberToken extends BaseToken<number> {
   $value: number;
 }
 
-
-
 export interface ShadowToken extends BaseToken<ShadowValue> {
   $type: "shadow";
   $value: ShadowValue;
@@ -60,88 +73,7 @@ export interface ShadowValue {
   color: string;
 }
 
-/**
- * Brakit Design Token Schema
- */
 export interface BrakitDesignTokens {
   $schema?: string;
-  color: {
-    primary: ColorToken;
-    "primary-soft": ColorToken;
-    surface: ColorToken;
-    "surface-alt": ColorToken;
-    "border-subtle": ColorToken;
-    danger: ColorToken;
-    success: ColorToken;
-    "text-main": ColorToken;
-    "text-muted": ColorToken;
-    [key: string]: ColorToken;
-  };
-  typography: {
-    h1: TypographyToken;
-    h2: TypographyToken;
-    h3: TypographyToken;
-    body: TypographyToken;
-    "body-sm": TypographyToken;
-    label: TypographyToken;
-    [key: string]: TypographyToken;
-  };
-  spacing: {
-    "section-y": DimensionToken;
-    "section-x": DimensionToken;
-    "space-xs": DimensionToken;
-    "space-sm": DimensionToken;
-    "space-md": DimensionToken;
-    "space-lg": DimensionToken;
-    "space-xl": DimensionToken;
-    [key: string]: DimensionToken;
-  };
-  radius: {
-    default: DimensionToken;
-    pill: DimensionToken;
-    [key: string]: DimensionToken;
-  };
-  shadow: {
-    none: ShadowToken;
-    default: ShadowToken;
-    [key: string]: ShadowToken;
-  };
-  layout: {
-    content: DimensionToken;
-    wide: DimensionToken;
-    [key: string]: DimensionToken;
-  };
-  border: {
-    subtle: DimensionToken;
-    strong: DimensionToken;
-    [key: string]: DimensionToken;
-  };
-  opacity: {
-    subtle: NumberToken;
-    disabled: NumberToken;
-    overlay: NumberToken;
-    [key: string]: NumberToken;
-  };
-  zIndex: {
-    base: NumberToken;
-    popover: NumberToken;
-    modal: NumberToken;
-    toast: NumberToken;
-    [key: string]: NumberToken;
-  };
-}
-
-/**
- * Resolved Tailwind classes for consumption by templates
- */
-export interface ResolvedTokens {
-  color: Record<string, string>;
-  typography: Record<string, string>;
-  spacing: Record<string, string>;
-  radius: Record<string, string>;
-  shadow: Record<string, string>;
-  layout: Record<string, string>;
-  border: Record<string, string>;
-  opacity: Record<string, string>;
-  zIndex: Record<string, string>;
+  [category: string]: Record<string, Token | undefined> | string | undefined;
 }

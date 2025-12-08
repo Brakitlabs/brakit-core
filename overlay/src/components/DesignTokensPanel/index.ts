@@ -25,6 +25,8 @@ export class DesignTokensPanel extends HTMLElement {
   private tokens: any = null;
   private resolvedTokens: any = null;
   private preview: TokenPreview;
+  private showImportModal = false;
+  private importError: string | null = null;
 
   constructor() {
     super();
@@ -95,6 +97,30 @@ export class DesignTokensPanel extends HTMLElement {
         return;
       }
 
+      if (target.closest(".import-btn")) {
+        e.preventDefault();
+        this.handleImportClick();
+        return;
+      }
+
+      if (target.closest(".import-modal-close")) {
+        e.preventDefault();
+        this.closeImportModal();
+        return;
+      }
+
+      if (target.closest(".import-modal-cancel")) {
+        e.preventDefault();
+        this.closeImportModal();
+        return;
+      }
+
+      if (target.closest(".import-modal-import")) {
+        e.preventDefault();
+        this.handleImportSubmit();
+        return;
+      }
+
       // Preset buttons
       if (target.closest(".preset-btn")) {
         const btn = target.closest(".preset-btn") as HTMLButtonElement;
@@ -122,6 +148,14 @@ export class DesignTokensPanel extends HTMLElement {
       if (!tokenPath) return;
 
       this.handleInput(target, tokenPath, field, unit);
+    });
+
+    // File input change event
+    this.shadowRoot?.addEventListener("change", (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.classList.contains("import-file-input")) {
+        this.handleFileUpload();
+      }
     });
   }
 
@@ -257,6 +291,80 @@ export class DesignTokensPanel extends HTMLElement {
         composed: true,
       })
     );
+  }
+
+  private handleImportClick() {
+    this.showImportModal = true;
+    this.importError = null;
+    this.render();
+  }
+
+  private closeImportModal() {
+    this.showImportModal = false;
+    this.importError = null;
+    this.render();
+  }
+
+  private handleFileUpload() {
+    const fileInput = this.shadowRoot?.querySelector(".import-file-input") as HTMLInputElement;
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
+
+    const file = fileInput.files[0];
+
+    // Validate file type
+    if (!file.name.endsWith('.json')) {
+      this.importError = "Please select a .json file";
+      this.render();
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      const textarea = this.shadowRoot?.querySelector(".import-textarea") as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.value = content;
+        // Clear any previous errors
+        this.importError = null;
+        this.render();
+      }
+    };
+    reader.onerror = () => {
+      this.importError = "Failed to read file";
+      this.render();
+    };
+    reader.readAsText(file);
+  }
+
+  private async handleImportSubmit() {
+    const textarea = this.shadowRoot?.querySelector(".import-textarea") as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const jsonText = textarea.value.trim();
+    if (!jsonText) {
+      this.importError = "Please upload a file or paste token JSON";
+      this.render();
+      return;
+    }
+
+    try {
+      const tokens = JSON.parse(jsonText);
+
+      // Dispatch import event
+      document.dispatchEvent(
+        new CustomEvent("brakit:import-tokens", {
+          detail: { tokens, source: "auto" },
+          bubbles: true,
+          composed: true,
+        })
+      );
+
+      // Close modal
+      this.closeImportModal();
+    } catch (error) {
+      this.importError = error instanceof Error ? error.message : "Invalid JSON format";
+      this.render();
+    }
   }
 
   private render() {
@@ -438,7 +546,6 @@ export class DesignTokensPanel extends HTMLElement {
         background: #f9fafb;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
       }
 
       .preview-header {
@@ -629,6 +736,188 @@ export class DesignTokensPanel extends HTMLElement {
         color: white;
         border-color: var(--accent);
       }
+
+      /* Import Modal */
+      .import-modal-backdrop {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000001;
+        backdrop-filter: blur(4px);
+      }
+
+      .import-modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--bg-secondary);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-lg);
+        z-index: 1000002;
+        width: 600px;
+        max-width: 90vw;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .import-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .import-modal-title {
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+      }
+
+      .import-modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.2s var(--transition);
+        line-height: 1;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .import-modal-close:hover {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+      }
+
+      .import-modal-body {
+        padding: 24px;
+        overflow-y: auto;
+        flex: 1;
+      }
+
+      .import-modal-description {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+        line-height: 1.5;
+      }
+
+      .import-modal-description strong {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      .import-error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+
+      .import-textarea {
+        width: 100%;
+        min-height: 300px;
+        padding: 12px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        resize: vertical;
+        transition: all 0.2s var(--transition);
+        background: var(--bg-primary);
+      }
+
+      .import-textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      }
+
+      .import-modal-info {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        border-radius: 6px;
+      }
+
+      .import-modal-footer {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      /* Import method sections */
+      .import-method-section {
+        margin-bottom: 16px;
+      }
+
+      .import-method-label {
+        display: block;
+      }
+
+      .import-method-title {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+      }
+
+      .import-file-button {
+        width: 100%;
+        justify-content: center;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .import-divider {
+        position: relative;
+        text-align: center;
+        margin: 20px 0;
+      }
+
+      .import-divider::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 1px;
+        background: var(--border-subtle);
+      }
+
+      .import-divider span {
+        position: relative;
+        display: inline-block;
+        padding: 0 12px;
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 500;
+      }
     `;
   }
 
@@ -639,6 +928,7 @@ export class DesignTokensPanel extends HTMLElement {
         <div class="panel-header">
           <div class="panel-title">Design Tokens</div>
           <div class="header-actions">
+            <button class="btn btn-secondary import-btn">📥 Import</button>
             <button class="btn btn-secondary reset-btn">Reset</button>
             <button class="btn btn-primary save-btn">Save</button>
             <button class="close-btn">×</button>
@@ -652,6 +942,78 @@ export class DesignTokensPanel extends HTMLElement {
             <div class="preview-header">Live Preview</div>
             <iframe class="preview-iframe"></iframe>
           </div>
+        </div>
+      </div>
+      ${this.renderImportModal()}
+    `;
+  }
+
+  private renderImportModal(): string {
+    if (!this.showImportModal) return '';
+
+    return `
+      <div class="import-modal-backdrop"></div>
+      <div class="import-modal">
+        <div class="import-modal-header">
+          <h3 class="import-modal-title">Import Design Tokens</h3>
+          <button class="import-modal-close">×</button>
+        </div>
+        <div class="import-modal-body">
+          <p class="import-modal-description">
+            Upload a .json file or paste your Figma, Style Dictionary, or W3C design tokens JSON.
+            This will <strong>override</strong> your current tokens.
+          </p>
+          ${this.importError ? `
+            <div class="import-error">
+              ⚠️ ${this.importError}
+            </div>
+          ` : ''}
+
+          <div class="import-method-section">
+            <label class="import-method-label">
+              <span class="import-method-title">📂 Upload File</span>
+              <input
+                type="file"
+                class="import-file-input"
+                accept=".json,application/json"
+                style="display: none;"
+              />
+              <button class="btn btn-secondary import-file-button" onclick="this.previousElementSibling.click()">
+                Choose .json file
+              </button>
+            </label>
+          </div>
+
+          <div class="import-divider">
+            <span>OR</span>
+          </div>
+
+          <div class="import-method-section">
+            <label class="import-method-label">
+              <span class="import-method-title">✏️ Paste JSON</span>
+            </label>
+            <textarea
+              class="import-textarea"
+              placeholder='Paste JSON here, e.g.
+{
+  "colors": {
+    "primary-500": { "$type": "color", "$value": "#0ea5e9" }
+  },
+  "spacing": {
+    "space-sm": { "$type": "dimension", "$value": "8px" }
+  }
+}'
+              rows="10"
+            ></textarea>
+          </div>
+
+          <div class="import-modal-info">
+            💡 Token names will be auto-sanitized (e.g., "primary-500" → "primary500")
+          </div>
+        </div>
+        <div class="import-modal-footer">
+          <button class="btn btn-secondary import-modal-cancel">Cancel</button>
+          <button class="btn btn-primary import-modal-import">Import & Override</button>
         </div>
       </div>
     `;

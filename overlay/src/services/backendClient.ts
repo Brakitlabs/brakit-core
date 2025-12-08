@@ -154,17 +154,32 @@ export interface UndoActionResponse {
 export interface DesignTokensResponse {
   success: boolean;
   tokens: any; // W3C format tokens
-  resolved: {
-    color: Record<string, string>;
-    typography: Record<string, string>;
-    spacing: Record<string, string>;
-    radius: Record<string, string>;
-    shadow: Record<string, string>;
-    layout: Record<string, string>;
-    border: Record<string, string>;
-    opacity: Record<string, string>;
-    zIndex: Record<string, string>;
-  };
+  resolved: Record<string, Record<string, any>>;
+  error?: string;
+}
+
+export interface TokenMapping {
+  original: string;
+  sanitized: string;
+  category: string;
+}
+
+export interface ImportTokensResponse {
+  success: boolean;
+  tokensImported: number;
+  mappings: TokenMapping[];
+  warnings: string[];
+  tokens: any;
+  resolved: Record<string, Record<string, any>>;
+  error?: string;
+}
+
+export interface ImportTokensPreviewResponse {
+  success: boolean;
+  tokensImported: number;
+  mappings: TokenMapping[];
+  warnings: string[];
+  preview: any;
   error?: string;
 }
 
@@ -305,7 +320,9 @@ export class BackendClient {
       return { success: true, tokens: data.tokens, resolved: data.resolved };
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to load default design tokens";
+        error instanceof Error
+          ? error.message
+          : "Failed to load default design tokens";
       logger.error("Failed to fetch default design tokens", { error: message });
       throw new Error(message);
     }
@@ -338,6 +355,91 @@ export class BackendClient {
       const message =
         error instanceof Error ? error.message : "Failed to save design tokens";
       logger.error("Failed to save design tokens", error);
+      throw new Error(message);
+    }
+  }
+
+  async importTokens(
+    tokens: any,
+    source?: "figma" | "style-dictionary" | "w3c" | "auto"
+  ): Promise<ImportTokensResponse> {
+    const endpoint = `${this.baseUrl}/api/editor/tokens/import`;
+    logger.debug("Importing design tokens", { endpoint, source });
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tokens, source: source || "auto" }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.success !== true) {
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : `Failed with status ${response.status}`;
+        throw new Error(message);
+      }
+
+      return {
+        success: true,
+        tokensImported: data.tokensImported || 0,
+        mappings: data.mappings || [],
+        warnings: data.warnings || [],
+        tokens: data.tokens,
+        resolved: data.resolved,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to import design tokens";
+      logger.error("Failed to import design tokens", error);
+      throw new Error(message);
+    }
+  }
+
+  async previewTokenImport(
+    tokens: any,
+    source?: "figma" | "style-dictionary" | "w3c" | "auto"
+  ): Promise<ImportTokensPreviewResponse> {
+    const endpoint = `${this.baseUrl}/api/editor/tokens/import/preview`;
+    logger.debug("Previewing token import", { endpoint, source });
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tokens, source: source || "auto" }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.success !== true) {
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : `Failed with status ${response.status}`;
+        throw new Error(message);
+      }
+
+      return {
+        success: true,
+        tokensImported: data.tokensImported || 0,
+        mappings: data.mappings || [],
+        warnings: data.warnings || [],
+        preview: data.preview,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to preview token import";
+      logger.error("Failed to preview token import", error);
       throw new Error(message);
     }
   }
@@ -547,7 +649,6 @@ export class BackendClient {
       };
     }
   }
-
 
   private parseSmartEditResponse(data: any): SmartEditUpdateResponse {
     const success = typeof data.success === "boolean" ? data.success : false;
@@ -865,7 +966,7 @@ export class BackendClient {
   }
 }
 
-function resolveBackendUrl(): string {
+export function resolveBackendUrl(): string {
   if (typeof window !== "undefined") {
     const globalValue =
       (window as any).BRAKIT_BACKEND_URL ||

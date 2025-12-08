@@ -66,11 +66,22 @@ const ShadowTokenSchema = z.object({
 
 /**
  * Complete design tokens schema
- * Uses passthrough() to allow additional custom tokens while validating known ones
+ *
+ * Extensible Architecture:
+ * - Uses passthrough() to allow additional custom token categories
+ * - Only validates known categories for type safety
+ * - New categories (duration, gradient, fontWeight, etc.) are allowed but not strictly validated
+ * - This provides a balance between type safety and extensibility
+ *
+ * To add strict validation for a new category:
+ * 1. Define a schema (e.g., DurationTokenSchema)
+ * 2. Add it to this object
+ * 3. Keep .passthrough() to allow future categories
  */
 export const BrakitDesignTokensSchema = z
   .object({
     $schema: z.string().optional(),
+    // Core validated categories
     color: z.record(ColorTokenSchema).optional(),
     typography: z.record(TypographyTokenSchema).optional(),
     spacing: z.record(DimensionTokenSchema).optional(),
@@ -80,7 +91,8 @@ export const BrakitDesignTokensSchema = z
     border: z.record(DimensionTokenSchema).optional(),
     opacity: z.record(NumberTokenSchema).optional(),
     zIndex: z.record(NumberTokenSchema).optional(),
+    // Additional categories allowed via passthrough (duration, gradient, fontWeight, etc.)
   })
-  .passthrough(); // Allow additional properties for extensibility
+  .passthrough(); // Allow unlimited additional categories for extensibility
 
 export type ValidatedDesignTokens = z.infer<typeof BrakitDesignTokensSchema>;

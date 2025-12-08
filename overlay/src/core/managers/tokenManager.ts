@@ -1,17 +1,12 @@
-import type { DesignTokensResponse } from "../../services/backendClient";
+import type {
+  DesignTokensResponse,
+  ImportTokensResponse,
+  ImportTokensPreviewResponse,
+  TokenMapping,
+} from "../../services/backendClient";
 import { logger } from "../../utils/logger";
 
-export interface ResolvedTokens {
-  color: Record<string, string>;
-  typography: Record<string, string>;
-  spacing: Record<string, string>;
-  radius: Record<string, string>;
-  shadow: Record<string, string>;
-  layout: Record<string, string>;
-  border: Record<string, string>;
-  opacity: Record<string, string>;
-  zIndex: Record<string, string>;
-}
+export type ResolvedTokens = Record<string, Record<string, any>>;
 
 /**
  * TokenManager
@@ -30,8 +25,7 @@ export class TokenManager {
     this.resolvedTokens = response.resolved;
     this.notifyListeners();
     logger.info("Design tokens loaded", {
-      colorCount: Object.keys(response.resolved.color).length,
-      typographyCount: Object.keys(response.resolved.typography).length,
+      categories: Object.keys(response.resolved).length,
     });
   }
 
@@ -67,6 +61,20 @@ export class TokenManager {
   }
 
   /**
+   * Handle successful token import
+   */
+  setImportedTokens(response: ImportTokensResponse): void {
+    this.rawTokens = response.tokens;
+    this.resolvedTokens = response.resolved;
+    this.notifyListeners();
+    logger.info("Design tokens imported successfully", {
+      tokensImported: response.tokensImported,
+      mappingsCount: response.mappings.length,
+      warnings: response.warnings.length,
+    });
+  }
+
+  /**
    * Notify all listeners of token changes
    */
   private notifyListeners(): void {
@@ -79,3 +87,5 @@ export class TokenManager {
     });
   }
 }
+
+export type { TokenMapping, ImportTokensResponse, ImportTokensPreviewResponse };

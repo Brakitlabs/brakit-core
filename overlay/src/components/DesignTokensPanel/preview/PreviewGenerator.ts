@@ -1,9 +1,49 @@
-/**
- * PreviewGenerator - Generates HTML preview from design tokens
- * Extracted from DesignTokensPanel for better maintainability
- */
+import {
+  findTokenByPattern,
+  TYPOGRAPHY_PATTERNS,
+  COLOR_PATTERNS,
+  SPACING_PATTERNS,
+  RADIUS_PATTERNS,
+} from "../../../services/semanticPatterns";
 
+/**
+ * Generates HTML preview from design tokens using pattern matching for token resolution
+ */
 export class PreviewGenerator {
+  /** Find a token using pattern matching */
+  private static findToken(categoryTokens: any, patterns: string[]): any {
+    if (!categoryTokens || typeof categoryTokens !== "object") return null;
+    const keys = Object.keys(categoryTokens);
+    if (keys.length === 0) return null;
+    for (const pattern of patterns) {
+      const found = keys.find((key) =>
+        key.toLowerCase().includes(pattern.toLowerCase())
+      );
+      if (found) return categoryTokens[found];
+    }
+    return categoryTokens[keys[0]];
+  }
+
+  /** Find typography token by semantic name */
+  private static findTypography(typography: any, semanticType: string): any {
+    return findTokenByPattern(typography, semanticType, TYPOGRAPHY_PATTERNS);
+  }
+
+  /** Find color token by semantic name */
+  private static findColor(colors: any, semanticColor: string): any {
+    return findTokenByPattern(colors, semanticColor, COLOR_PATTERNS);
+  }
+
+  /** Find spacing token by semantic name */
+  private static findSpacing(spacing: any, size: string): any {
+    return findTokenByPattern(spacing, size, SPACING_PATTERNS);
+  }
+
+  /** Find radius token by semantic name */
+  private static findRadius(radius: any, size: string): any {
+    return findTokenByPattern(radius, size, RADIUS_PATTERNS);
+  }
+
   /**
    * Generate complete HTML document for preview iframe
    */
@@ -16,7 +56,6 @@ export class PreviewGenerator {
     const spacing = safeTokens.spacing || {};
     const radius = safeTokens.radius || {};
     const shadows = safeTokens.shadow || {};
-    const layout = safeTokens.layout || {};
     const opacity = safeTokens.opacity || {};
     const border = safeTokens.border || {};
 
@@ -90,9 +129,10 @@ export class PreviewGenerator {
 
     const typeFor = (key: string) => {
       const defaults = typeDefaults[key] || {};
-      const token = typography[key];
+      // Use smart typography finder instead of direct lookup
+      const token = this.findTypography(typography, key);
       const value = token?.$value || {};
-      
+
       return {
         fontSize: value.fontSize || defaults.fontSize,
         fontWeight: value.fontWeight || defaults.fontWeight,
@@ -129,7 +169,6 @@ export class PreviewGenerator {
       shadows,
       spacing,
       opacity,
-      layout,
       typeVars,
     });
   }
@@ -138,7 +177,7 @@ export class PreviewGenerator {
    * Generate the complete HTML document structure
    */
   private static generateDocument(ctx: any): string {
-    const { v, shadowString, colors, border, radius, shadows, spacing, opacity, layout, typeVars } = ctx;
+    const { v, shadowString, colors, border, radius, shadows, spacing, opacity, typeVars } = ctx;
 
     return `
       <!DOCTYPE html>
@@ -147,52 +186,63 @@ export class PreviewGenerator {
         <meta charset="UTF-8">
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
+
+          html {
+            overflow-y: auto;
+            height: 100%;
+          }
+
+          body {
+            min-height: 100%;
+            overflow-y: auto;
+          }
+
           :root {
-            /* Colors */
-            --surface: ${v(colors.surface, "#ffffff")};
-            --surface-alt: ${v(colors["surface-alt"], "#f8fafc")};
-            --text: ${v(colors["text-main"], "#0f172a")};
-            --muted: ${v(colors["text-muted"], "#64748b")};
-            --accent: ${v(colors.primary, "#2563eb")};
-            --accent-soft: ${v(colors["primary-soft"], "#eff6ff")};
-            --danger: ${v(colors.danger, "#dc2626")};
-            --danger-soft: ${v(colors["danger-soft"], "#fef2f2")};
-            --success: ${v(colors.success, "#059669")};
-            --success-soft: ${v(colors["success-soft"], "#ecfdf5")};
-            --warning: ${v(colors.warning, "#f59e0b")};
-            --warning-soft: ${v(colors["warning-soft"], "#fffbeb")};
-            --info: ${v(colors.info, "#0284c7")};
-            --info-soft: ${v(colors["info-soft"], "#f0f9ff")};
-            --border-color: ${v(colors["border-subtle"], "#e2e8f0")};
-            --overlay: ${v(colors.overlay, "rgba(15, 23, 42, 0.64)")};
-            --focus-ring: ${v(colors["focus-ring"], "rgba(37, 99, 235, 0.45)")};
+            /* Colors - Smart pattern matching */
+            --surface: ${v(this.findColor(colors, "surface"), "#ffffff")};
+            --surface-alt: ${v(this.findColor(colors, "surface-alt"), "#f8fafc")};
+            --text: ${v(this.findColor(colors, "text-main"), "#0f172a")};
+            --muted: ${v(this.findColor(colors, "text-muted"), "#64748b")};
+            --accent: ${v(this.findColor(colors, "primary"), "#2563eb")};
+            --accent-soft: ${v(this.findColor(colors, "primary-soft"), "#eff6ff")};
+            --danger: ${v(this.findColor(colors, "danger"), "#dc2626")};
+            --danger-soft: ${v(this.findColor(colors, "danger-soft"), "#fef2f2")};
+            --success: ${v(this.findColor(colors, "success"), "#059669")};
+            --success-soft: ${v(this.findColor(colors, "success-soft"), "#ecfdf5")};
+            --warning: ${v(this.findColor(colors, "warning"), "#f59e0b")};
+            --warning-soft: ${v(this.findColor(colors, "warning-soft"), "#fffbeb")};
+            --info: ${v(this.findColor(colors, "info"), "#0284c7")};
+            --info-soft: ${v(this.findColor(colors, "info-soft"), "#f0f9ff")};
+            --border-color: ${v(this.findColor(colors, "border-subtle"), "#e2e8f0")};
+            --overlay: ${v(this.findColor(colors, "overlay"), "rgba(15, 23, 42, 0.64)")};
+            --focus-ring: ${v(this.findColor(colors, "focus-ring"), "rgba(37, 99, 235, 0.45)")};
 
-            /* Borders */
-            --border-width: ${v(border.subtle, "1px")};
-            --border-strong: ${v(border.strong, "2px")};
+            /* Borders - Smart pattern matching */
+            --border-width: ${v(this.findToken(border, ["subtle", "default", "base"]), "1px")};
+            --border-strong: ${v(this.findToken(border, ["strong", "thick", "bold"]), "2px")};
 
-            /* Radius */
-            --radius: ${v(radius.default, "0.75rem")};
-            --radius-sm: ${v(radius.sm, "0.375rem")};
-            --radius-lg: ${v(radius.lg, "1rem")};
-            --radius-pill: ${v(radius.pill, "9999px")};
+            /* Radius - Smart pattern matching */
+            --radius: ${v(this.findRadius(radius, "default"), "0.75rem")};
+            --radius-sm: ${v(this.findRadius(radius, "sm"), "0.375rem")};
+            --radius-lg: ${v(this.findRadius(radius, "lg"), "1rem")};
+            --radius-pill: ${v(this.findRadius(radius, "pill"), "9999px")};
 
-            /* Shadows */
-            --shadow: ${shadowString(shadows.default, "0 4px 6px -1px rgba(0,0,0,0.1)")};
-            --shadow-sm: ${shadowString(shadows.default, "0 2px 4px rgba(0,0,0,0.08)")};
-            --shadow-hover: ${shadowString(shadows.hover, "0 10px 25px -5px rgba(15,23,42,0.12)")};
+            /* Shadows - Smart pattern matching */
+            --shadow: ${shadowString(this.findToken(shadows, ["default", "base", "md"]), "0 4px 6px -1px rgba(0,0,0,0.1)")};
+            --shadow-sm: ${shadowString(this.findToken(shadows, ["sm", "small"]), "0 2px 4px rgba(0,0,0,0.08)")};
+            --shadow-hover: ${shadowString(this.findToken(shadows, ["hover", "lg", "large"]), "0 10px 25px -5px rgba(15,23,42,0.12)")};
 
-            /* Spacing */
-            --space-xs: ${v(spacing["space-xs"], "0.5rem")};
-            --space-sm: ${v(spacing["space-sm"], "0.75rem")};
-            --space-md: ${v(spacing["space-md"], "1rem")};
-            --space-lg: ${v(spacing["space-lg"], "1.5rem")};
-            --space-xl: ${v(spacing["space-xl"], "2rem")};
-            --section-x: ${v(spacing["section-x"], "1.5rem")};
-            --section-y: ${v(spacing["section-y"], "0.75rem")};
+            /* Spacing - Smart pattern matching */
+            --space-xs: ${v(this.findSpacing(spacing, "space-xs"), "0.5rem")};
+            --space-sm: ${v(this.findSpacing(spacing, "space-sm"), "0.75rem")};
+            --space-md: ${v(this.findSpacing(spacing, "space-md"), "1rem")};
+            --space-lg: ${v(this.findSpacing(spacing, "space-lg"), "1.5rem")};
+            --space-xl: ${v(this.findSpacing(spacing, "space-xl"), "2rem")};
+            --section-x: ${v(this.findSpacing(spacing, "section-x"), "1.5rem")};
+            --section-y: ${v(this.findSpacing(spacing, "section-y"), "0.75rem")};
 
-            /* Opacity */
-            --overlay-opacity: ${v(opacity.overlay, 0.72)};
+            /* Opacity - Smart pattern matching */
+            --overlay-opacity: ${v(this.findToken(opacity, ["overlay", "backdrop", "default"]), 0.72)};
 
             /* Animation */
             --duration: 220ms;
@@ -205,7 +255,7 @@ export class PreviewGenerator {
         </style>
       </head>
       <body>
-        ${this.getPreviewBody()}
+        ${this.getPreviewBody(ctx)}
       </body>
       </html>
     `;
@@ -223,8 +273,8 @@ export class PreviewGenerator {
         font-size: var(--body-size);
         line-height: var(--body-line);
         letter-spacing: var(--body-track);
-        height: 100vh;
-        overflow: hidden;
+        min-height: 100vh;
+        overflow-y: auto;
         display: grid;
         grid-template-rows: auto 1fr;
       }
@@ -262,7 +312,7 @@ export class PreviewGenerator {
         display: grid;
         grid-template-columns: 1fr 1.2fr 1fr;
         gap: var(--space-lg);
-        overflow: hidden;
+        overflow: visible;
         max-width: 1600px;
         margin: 0 auto;
         width: 100%;
@@ -436,149 +486,391 @@ export class PreviewGenerator {
         font-weight: 600;
         line-height: 1;
       }
-      
+
       .badge-neutral { background: var(--surface-alt); color: var(--text); border: 1px solid var(--border-color); }
       .badge-accent { background: var(--accent-soft); color: var(--accent); }
       .badge-success { background: var(--success-soft); color: var(--success); }
+
+      /* Empty State */
+      .empty-state {
+        padding: var(--space-lg);
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.875rem;
+        background: var(--surface-alt);
+        border: 1px dashed var(--border-color);
+        border-radius: var(--radius);
+      }
+
+      /* Enhanced Typography Cards */
+      .type-details {
+        font-size: 0.65rem;
+        color: var(--muted);
+        font-family: var(--mono-font);
+        margin-top: 0.25rem;
+      }
+
+      /* Enhanced Spacing */
+      .space-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+      }
+      .space-name {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .space-val {
+        font-size: 0.65rem;
+        color: var(--muted);
+        font-family: var(--mono-font);
+      }
+
+      /* Radius Preview */
+      .radius-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
+        padding: var(--space-sm);
+        background: var(--surface);
+        border: var(--border-width) solid var(--border-color);
+        border-radius: var(--radius-sm);
+      }
+      .radius-box {
+        width: 3rem;
+        height: 3rem;
+        background: var(--accent-soft);
+        border: 2px solid var(--accent);
+        flex-shrink: 0;
+      }
+      .radius-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        min-width: 0;
+      }
+      .radius-name {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .radius-val {
+        font-size: 0.65rem;
+        color: var(--muted);
+        font-family: var(--mono-font);
+      }
+
+      /* Shadow Preview */
+      .shadow-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-xs);
+      }
+      .shadow-box {
+        width: 100%;
+        height: 4rem;
+        background: var(--surface);
+        border-radius: var(--radius);
+        display: grid;
+        place-items: center;
+      }
+      .shadow-info {
+        width: 100%;
+        text-align: center;
+      }
+      .shadow-name {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      /* Border Preview */
+      .border-item {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+        padding: var(--space-sm);
+        background: var(--surface);
+        border: var(--border-width) solid var(--border-color);
+        border-radius: var(--radius-sm);
+      }
+      .border-viz {
+        width: 100%;
+        height: 0;
+      }
+      .border-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .border-name {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .border-val {
+        font-size: 0.65rem;
+        color: var(--muted);
+        font-family: var(--mono-font);
+      }
     `;
   }
 
   /**
-   * Get HTML body content for preview
+   * Get HTML body content for preview - FULLY DYNAMIC
+   * Generates a page that adapts 100% to the tokens provided
    */
-  private static getPreviewBody(): string {
+  private static getPreviewBody(ctx: any): string {
+    const { colors, typography, spacing, radius, shadows } = ctx;
+
+    // Analyze what tokens we have
+    const colorEntries = Object.entries(colors || {});
+    const typographyEntries = Object.entries(typography || {});
+    const spacingEntries = Object.entries(spacing || {});
+    const radiusEntries = Object.entries(radius || {});
+    const shadowEntries = Object.entries(shadows || {});
+
+    const hasColors = colorEntries.length > 0;
+    const hasTypography = typographyEntries.length > 0;
+    const hasSpacing = spacingEntries.length > 0;
+    const hasRadius = radiusEntries.length > 0;
+    const hasShadows = shadowEntries.length > 0;
+
+    // If no tokens at all, show empty state
+    if (!hasColors && !hasTypography && !hasSpacing && !hasRadius && !hasShadows) {
+      return this.generateEmptyState();
+    }
+
     return `
-      <header>
-        <div class="logo">
-          <div class="logo-dot"></div>
-          <span>Token Preview</span>
+      <div style="min-height: 100vh; background: var(--surface-alt); padding: var(--space-lg); padding-bottom: calc(var(--space-xl) * 2);">
+        <div style="max-width: 1400px; margin: 0 auto;">
+
+          <!-- Page Header -->
+          ${this.generateDynamicHeader(colorEntries)}
+
+          <!-- Dynamic Content Grid -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: var(--space-lg); margin-top: var(--space-xl);">
+
+            ${hasColors ? this.generateColorShowcase(colorEntries) : ''}
+            ${hasTypography ? this.generateTypographyShowcase(typographyEntries) : ''}
+            ${hasSpacing ? this.generateSpacingShowcase(spacingEntries) : ''}
+            ${hasRadius ? this.generateRadiusShowcase(radiusEntries) : ''}
+            ${hasShadows ? this.generateShadowShowcase(shadowEntries) : ''}
+
+          </div>
+
+          <!-- Dynamic UI Examples -->
+          ${hasColors ? this.generateUIExamples(colorEntries) : ''}
+
         </div>
-        <div class="badge badge-neutral">v1.2</div>
+      </div>
+    `;
+  }
+
+  /**
+   * Generate empty state when no tokens exist
+   */
+  private static generateEmptyState(): string {
+    return `
+      <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--surface-alt);">
+        <div style="text-align: center; max-width: 500px; padding: var(--space-xl);">
+          <div style="font-size: 4rem; margin-bottom: var(--space-lg);">🎨</div>
+          <h2 class="h2" style="color: var(--text); margin-bottom: var(--space-md);">No Design Tokens Yet</h2>
+          <p class="body" style="color: var(--muted);">
+            Import or create design tokens to see them come to life in this preview.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Generate dynamic header using actual color tokens
+   */
+  private static generateDynamicHeader(colorEntries: [string, any][]): string {
+    // Use first color as accent if available
+    const firstColor = colorEntries[0];
+    const accentColor = firstColor ? firstColor[1].$value : 'var(--accent)';
+
+    return `
+      <header style="background: var(--surface); padding: var(--space-lg); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: var(--space-xl);">
+        <div style="display: flex; align-items: center; gap: var(--space-md);">
+          <div style="width: 48px; height: 48px; background: ${accentColor}; border-radius: var(--radius);"></div>
+          <div>
+            <h1 class="h2" style="color: var(--text); margin-bottom: 0.25rem;">Design System Preview</h1>
+            <p class="body-sm" style="color: var(--muted);">Live preview of your design tokens</p>
+          </div>
+        </div>
       </header>
+    `;
+  }
 
-      <main>
-        <!-- Column 1: Typography & Spacing -->
-        <div class="col">
-          <div class="section">
-            <div class="section-title">Typography</div>
-            <div style="display: grid; gap: var(--space-sm)">
-              <div class="type-card">
-                <div class="h1">Aa</div>
-                <div class="type-meta">Heading 1</div>
-              </div>
-              <div class="grid-2">
-                <div class="type-card">
-                  <div class="h2">Aa</div>
-                  <div class="type-meta">Heading 2</div>
-                </div>
-                <div class="type-card">
-                  <div class="h3">Aa</div>
-                  <div class="type-meta">Heading 3</div>
-                </div>
-              </div>
-              <div class="type-card">
-                <div class="body">Body text regular.</div>
-                <div class="type-meta">Body</div>
-              </div>
-              <div class="grid-2">
-                <div class="type-card">
-                  <div class="label">Label</div>
-                  <div class="type-meta">Label</div>
-                </div>
-                <div class="type-card">
-                  <div class="mono">Code</div>
-                  <div class="type-meta">Mono</div>
-                </div>
-              </div>
-            </div>
+  /**
+   * Generate color showcase using ALL color tokens
+   */
+  private static generateColorShowcase(colorEntries: [string, any][]): string {
+    const colorCards = colorEntries.map(([name, token]) => {
+      const value = token?.$value || '#cccccc';
+      return `
+        <div style="background: ${value}; padding: var(--space-md); border-radius: var(--radius-sm); min-height: 80px; display: flex; flex-direction: column; justify-content: flex-end;">
+          <div style="background: rgba(0,0,0,0.7); color: white; padding: 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">
+            <div style="font-weight: 600;">${name}</div>
+            <div style="opacity: 0.9; font-family: var(--mono-font); font-size: 0.7rem;">${value}</div>
           </div>
+        </div>
+      `;
+    }).join('');
 
-          <div class="section">
-            <div class="section-title">Spacing</div>
-            <div style="display: grid; gap: var(--space-xs)">
-              <div class="space-item"><div class="space-viz" style="width: var(--space-xs)"></div><div class="space-info">xs</div></div>
-              <div class="space-item"><div class="space-viz" style="width: var(--space-sm)"></div><div class="space-info">sm</div></div>
-              <div class="space-item"><div class="space-viz" style="width: var(--space-md)"></div><div class="space-info">md</div></div>
-              <div class="space-item"><div class="space-viz" style="width: var(--space-lg)"></div><div class="space-info">lg</div></div>
-              <div class="space-item"><div class="space-viz" style="width: var(--space-xl)"></div><div class="space-info">xl</div></div>
-            </div>
+    return `
+      <div class="card" style="padding: var(--space-lg);">
+        <h3 class="h3" style="color: var(--text); margin-bottom: var(--space-md);">Colors (${colorEntries.length})</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-sm);">
+          ${colorCards}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Generate typography showcase using ALL typography tokens
+   */
+  private static generateTypographyShowcase(typographyEntries: [string, any][]): string {
+    const typeSamples = typographyEntries.map(([name, token]) => {
+      const value = token?.$value || {};
+      const fontSize = value.fontSize || '1rem';
+      const fontWeight = value.fontWeight || '400';
+      const lineHeight = value.lineHeight || '1.5';
+
+      return `
+        <div style="margin-bottom: var(--space-md); padding: var(--space-md); background: var(--surface-alt); border-radius: var(--radius-sm);">
+          <div style="font-size: ${fontSize}; font-weight: ${fontWeight}; line-height: ${lineHeight}; color: var(--text); margin-bottom: var(--space-xs);">
+            The quick brown fox jumps over the lazy dog
+          </div>
+          <div style="font-size: 0.7rem; color: var(--muted); font-family: var(--mono-font);">
+            ${name} · ${fontSize} · ${fontWeight}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="card" style="padding: var(--space-lg);">
+        <h3 class="h3" style="color: var(--text); margin-bottom: var(--space-md);">Typography (${typographyEntries.length})</h3>
+        ${typeSamples}
+      </div>
+    `;
+  }
+
+  /**
+   * Generate spacing showcase using ALL spacing tokens
+   */
+  private static generateSpacingShowcase(spacingEntries: [string, any][]): string {
+    const spacingBars = spacingEntries.map(([name, token]) => {
+      const value = token?.$value || '0px';
+      return `
+        <div style="display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm);">
+          <div style="width: ${value}; height: 24px; background: var(--accent); border-radius: 0.25rem;"></div>
+          <div style="font-size: 0.75rem; color: var(--text); font-weight: 600;">${name}</div>
+          <div style="font-size: 0.7rem; color: var(--muted); font-family: var(--mono-font);">${value}</div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="card" style="padding: var(--space-lg);">
+        <h3 class="h3" style="color: var(--text); margin-bottom: var(--space-md);">Spacing (${spacingEntries.length})</h3>
+        ${spacingBars}
+      </div>
+    `;
+  }
+
+  /**
+   * Generate radius showcase using ALL radius tokens
+   */
+  private static generateRadiusShowcase(radiusEntries: [string, any][]): string {
+    const radiusBoxes = radiusEntries.map(([name, token]) => {
+      const value = token?.$value || '0px';
+      return `
+        <div style="text-align: center;">
+          <div style="width: 80px; height: 80px; background: var(--accent-soft); border: 2px solid var(--accent); border-radius: ${value}; margin: 0 auto var(--space-sm);"></div>
+          <div style="font-size: 0.75rem; color: var(--text); font-weight: 600;">${name}</div>
+          <div style="font-size: 0.7rem; color: var(--muted); font-family: var(--mono-font);">${value}</div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="card" style="padding: var(--space-lg);">
+        <h3 class="h3" style="color: var(--text); margin-bottom: var(--space-md);">Border Radius (${radiusEntries.length})</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: var(--space-lg);">
+          ${radiusBoxes}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Generate shadow showcase using ALL shadow tokens
+   */
+  private static generateShadowShowcase(shadowEntries: [string, any][]): string {
+    const shadowBoxes = shadowEntries.map(([name, token]) => {
+      const shadowVal = token?.$value;
+      let shadowString = '0 2px 4px rgba(0,0,0,0.1)';
+      if (shadowVal && typeof shadowVal === 'object') {
+        const { offsetX = '0', offsetY = '0', blur = '0', spread = '0', color = 'rgba(0,0,0,0.1)' } = shadowVal;
+        shadowString = `${offsetX} ${offsetY} ${blur} ${spread} ${color}`;
+      }
+
+      return `
+        <div style="text-align: center;">
+          <div style="width: 100px; height: 100px; background: var(--surface); box-shadow: ${shadowString}; border-radius: var(--radius); margin: var(--space-md) auto;"></div>
+          <div style="font-size: 0.75rem; color: var(--text); font-weight: 600;">${name}</div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="card" style="padding: var(--space-lg);">
+        <h3 class="h3" style="color: var(--text); margin-bottom: var(--space-md);">Shadows (${shadowEntries.length})</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--space-lg);">
+          ${shadowBoxes}
+        </div>
+      </div>
+    `;
+  }
+
+  /** Generate realistic UI examples using actual tokens */
+  private static generateUIExamples(colorEntries: [string, any][]): string {
+    const buttons = colorEntries.slice(0, 5).map(([name, token]) => {
+      const value = token?.$value || '#2563eb';
+      return `<button class="btn" style="background: ${value}; color: white; border: none;">${name}</button>`;
+    }).join('');
+
+    return `
+      <div class="card" style="padding: var(--space-xl); margin-top: var(--space-xl); grid-column: 1 / -1;">
+        <h3 class="h2" style="color: var(--text); margin-bottom: var(--space-lg); text-align: center;">UI Component Examples</h3>
+
+        <div style="margin-bottom: var(--space-xl);">
+          <h4 class="h3" style="color: var(--text); margin-bottom: var(--space-md);">Buttons</h4>
+          <div style="display: flex; flex-wrap: wrap; gap: var(--space-md);">
+            ${buttons}
           </div>
         </div>
 
-        <!-- Column 2: Components -->
-        <div class="col">
-          <div class="section">
-            <div class="section-title">Interactive Elements</div>
-            
-            <!-- Buttons -->
-            <div class="card">
-              <div class="label" style="margin-bottom: var(--space-sm)">Buttons</div>
-              <div class="btn-group">
-                <button class="btn btn-primary">Primary</button>
-                <button class="btn btn-secondary">Secondary</button>
-                <button class="btn btn-ghost">Ghost</button>
-                <button class="btn btn-danger">Danger</button>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-lg);">
+          ${colorEntries.slice(0, 3).map(([name, token]) => {
+            const value = token?.$value || '#ffffff';
+            return `
+              <div class="card" style="border-left: 4px solid ${value}; padding: var(--space-lg);">
+                <h4 class="h3" style="color: var(--text); margin-bottom: var(--space-sm);">Feature Card</h4>
+                <p class="body" style="color: var(--muted);">This card uses the ${name} color as an accent.</p>
               </div>
-            </div>
-
-            <!-- Inputs -->
-            <div class="card">
-              <div class="label" style="margin-bottom: var(--space-sm)">Form Inputs</div>
-              <div style="display: grid; gap: var(--space-md)">
-                <div class="input-group">
-                  <label class="input-label">Default Input</label>
-                  <input type="text" class="input" placeholder="Type something..." />
-                </div>
-                <div class="input-group">
-                  <label class="input-label" style="color: var(--danger)">Error State</label>
-                  <input type="text" class="input input-error" value="Invalid value" />
-                </div>
-              </div>
-            </div>
-
-            <!-- Card Demo -->
-            <div class="card card-interactive">
-              <div class="h3">Interactive Card</div>
-              <div class="body-sm" style="color: var(--muted); margin: var(--space-xs) 0 var(--space-md)">
-                Hover me to see shadow and border transition.
-              </div>
-              <div class="badge-group">
-                <span class="badge badge-accent">New</span>
-                <span class="badge badge-success">Active</span>
-              </div>
-            </div>
-          </div>
+            `;
+          }).join('')}
         </div>
-
-        <!-- Column 3: Colors & Status -->
-        <div class="col">
-          <div class="section">
-            <div class="section-title">Semantic Colors</div>
-            <div class="color-grid">
-              <div class="swatch"><div class="swatch-color" style="background: var(--text)"></div><div class="swatch-info"><span class="swatch-name">Text</span><span class="swatch-val">Main</span></div></div>
-              <div class="swatch"><div class="swatch-color" style="background: var(--muted)"></div><div class="swatch-info"><span class="swatch-name">Muted</span><span class="swatch-val">Text</span></div></div>
-              <div class="swatch"><div class="swatch-color" style="background: var(--surface)"></div><div class="swatch-info"><span class="swatch-name">Surface</span><span class="swatch-val">Base</span></div></div>
-              <div class="swatch"><div class="swatch-color" style="background: var(--surface-alt)"></div><div class="swatch-info"><span class="swatch-name">Surface</span><span class="swatch-val">Alt</span></div></div>
-              <div class="swatch"><div class="swatch-color" style="background: var(--accent)"></div><div class="swatch-info"><span class="swatch-name">Primary</span><span class="swatch-val">Brand</span></div></div>
-              <div class="swatch"><div class="swatch-color" style="background: var(--success)"></div><div class="swatch-info"><span class="swatch-name">Success</span><span class="swatch-val">Good</span></div></div>
-              <div class="swatch"><div class="swatch-color" style="background: var(--warning)"></div><div class="swatch-info"><span class="swatch-name">Warning</span><span class="swatch-val">Alert</span></div></div>
-              <div class="swatch"><div class="swatch-color" style="background: var(--danger)"></div><div class="swatch-info"><span class="swatch-name">Danger</span><span class="swatch-val">Error</span></div></div>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">Effects</div>
-            <div class="card" style="background: var(--surface-alt)">
-              <div class="label" style="margin-bottom: var(--space-sm)">Shadows & Radius</div>
-              <div style="display: flex; gap: var(--space-md)">
-                <div style="width: 3rem; height: 3rem; background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: grid; place-items: center; font-size: 0.6rem; color: var(--muted)">sm</div>
-                <div style="width: 3rem; height: 3rem; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); display: grid; place-items: center; font-size: 0.6rem; color: var(--muted)">def</div>
-                <div style="width: 3rem; height: 3rem; background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-hover); display: grid; place-items: center; font-size: 0.6rem; color: var(--muted)">hover</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
+      </div>
     `;
   }
 }

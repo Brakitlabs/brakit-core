@@ -2,9 +2,9 @@ import fs from "fs/promises";
 import path from "path";
 import type { BrakitDesignTokens } from "../types";
 import { generateTokenHash } from "./hashUtils";
-import { TokenJSGenerator } from "./TokenJSGenerator";
-import { TokenDTSGenerator } from "./TokenDTSGenerator";
-import { CSSBindingsGenerator } from "./CSSBindingsGenerator";
+import { TokenJSGenerator } from "./tokenJSGenerator";
+import { TokenDTSGenerator } from "./tokenDTSGenerator";
+import { CSSBindingsGenerator } from "./cssBindingsGenerator";
 
 /**
  * Main code generator for design tokens
@@ -17,7 +17,12 @@ export class TokenCodeGenerator {
   constructor(projectRoot?: string) {
     this.projectRoot = projectRoot || process.env.PROJECT_ROOT || process.cwd();
     // Generate to node_modules/@brakit/tokens for clean imports
-    this.generatedDir = path.join(this.projectRoot, "node_modules", "@brakit", "tokens");
+    this.generatedDir = path.join(
+      this.projectRoot,
+      "node_modules",
+      "@brakit",
+      "tokens"
+    );
   }
 
   /**
@@ -37,11 +42,7 @@ export class TokenCodeGenerator {
 
     // Write files
     await Promise.all([
-      fs.writeFile(
-        path.join(this.generatedDir, "index.js"),
-        tokensJS,
-        "utf-8"
-      ),
+      fs.writeFile(path.join(this.generatedDir, "index.js"), tokensJS, "utf-8"),
       fs.writeFile(
         path.join(this.generatedDir, "index.d.ts"),
         tokensDTS,
